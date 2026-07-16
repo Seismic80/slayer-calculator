@@ -104,13 +104,31 @@ function stripWiki(s) {
 // First entry is the default "base" kill. Names must match wiki page titles
 // (redirects are followed). Bosses/alternatives per the master tables'
 // Alternative(s) columns.
+// Composite kill units: one "unit" kill = several monsters' loot, counting
+// `count` toward the task (e.g. Kree'arra room: boss + 3 minions all count
+// as aviansies; K'ril room: boss + Tstanon Karlak + Zakl'n Gritch count as
+// greater demons, Balfrug is killed and looted but doesn't count).
+const KREE_ROOM = { label: "Kree'arra + minions", monsters: ["Kree'arra", 'Wingman Skree', 'Flockleader Geerin', 'Flight Kilisa'], count: 4 };
+const KRIL_ROOM = { label: "K'ril Tsutsaroth + minions", monsters: ["K'ril Tsutsaroth", 'Tstanon Karlak', "Zakl'n Gritch", 'Balfrug Kreeyath'], count: 3 };
+const DKS_TRIO = { label: 'Dagannoth Kings (trio)', monsters: ['Dagannoth Rex', 'Dagannoth Prime', 'Dagannoth Supreme'], count: 3 };
+
+// Boss task rosters, per https://oldschool.runescape.wiki/w/Boss#Boss_slayer
+// (Barrows brothers omitted: chest loot isn't modelled). Alchemical Hydra is
+// Konar-exclusive; Krystilia only rolls Wilderness bosses plus KBD.
+const BOSS_MAINLAND = ['General Graardor', 'Commander Zilyana', "K'ril Tsutsaroth", "Kree'arra",
+  'Vorkath', 'Zulrah', 'Duke Sucellus', 'The Leviathan', 'Vardorvis', 'The Whisperer', 'Phantom Muspah',
+  'Sarachnis', 'Giant Mole', 'Kalphite Queen', 'King Black Dragon', 'Kraken', 'Cerberus',
+  'Thermonuclear smoke devil', 'Abyssal Sire', 'Grotesque Guardians', 'Araxxor', 'Maggot King',
+  'Shellbane gryphon', 'Dagannoth Rex', 'Dagannoth Prime', 'Dagannoth Supreme', DKS_TRIO,
+  'Callisto', "Vet'ion", 'Venenatis', 'Scorpia', 'Chaos Elemental', 'Chaos Fanatic', 'Crazy archaeologist'];
+
 const CANDIDATES = {
   'Aberrant spectres': ['Aberrant spectre', 'Deviant spectre'],
   'Abyssal demons': ['Abyssal demon', 'Abyssal Sire'],
   'Ankou': ['Ankou'],
   'Aquanites': ['Aquanite'],
   'Araxytes': ['Araxyte', 'Araxxor'],
-  'Aviansie': ['Aviansie', "Kree'arra"],
+  'Aviansie': ['Aviansie', KREE_ROOM],
   'Basilisks': ['Basilisk', 'Basilisk Knight'],
   'Black demons': ['Black demon', 'Demonic gorilla'],
   'Black dragons': ['Black dragon', 'Brutal black dragon', 'King Black Dragon'],
@@ -120,7 +138,7 @@ const CANDIDATES = {
   'Cave horrors': ['Cave horror'],
   'Cave kraken': ['Cave kraken', 'Kraken'],
   'Custodian stalkers': ['Elder custodian stalker', 'Mature custodian stalker', 'Juvenile custodian stalker'],
-  'Dagannoth': ['Dagannoth (Waterbirth Island)', 'Dagannoth Rex'],
+  'Dagannoth': ['Dagannoth (Waterbirth Island)', 'Dagannoth Rex', 'Dagannoth Prime', 'Dagannoth Supreme', DKS_TRIO],
   'Dark beasts': ['Dark beast'],
   'Drakes': ['Drake'],
   'Dust devils': ['Dust devil'],
@@ -128,8 +146,8 @@ const CANDIDATES = {
   'Fire giants': ['Fire giant'],
   'Fossil Island Wyverns': ['Spitting Wyvern', 'Ancient Wyvern'],
   'Frost dragons': ['Frost dragon'],
-  'Gargoyles': ['Gargoyle', 'Grotesque Guardians'],
-  'Greater demons': ['Greater demon', "K'ril Tsutsaroth", 'Skotizo', 'Tormented Demon'],
+  'Gargoyles': ['Gargoyle', { label: 'Grotesque Guardians', monsters: ['Grotesque Guardians'], count: 1, ggdouble: true }],
+  'Greater demons': ['Greater demon', KRIL_ROOM, 'Skotizo', 'Tormented Demon'],
   'Gryphons': ['Gryphon', 'Shellbane gryphon'],
   'Hellhounds': ['Hellhound', 'Cerberus'],
   'Hydras': ['Hydra', 'Alchemical Hydra'],
@@ -179,9 +197,8 @@ const CANDIDATES = {
   'Spiders': ['Giant spider', 'Venenatis', 'Spindel'],
   'Zombies': ['Zombie', 'Zombie pirate'],
   // Boss task rosters
-  'Boss (Duradel/Nieve)': ['General Graardor', 'Commander Zilyana', "K'ril Tsutsaroth", "Kree'arra",
-    'Dagannoth Rex', 'Kalphite Queen', 'King Black Dragon', 'Giant Mole', 'Grotesque Guardians',
-    'Kraken', 'Cerberus', 'Thermonuclear smoke devil', 'Abyssal Sire'],
+  'Boss (Duradel/Nieve)': BOSS_MAINLAND,
+  'Boss (Konar)': [...BOSS_MAINLAND, 'Alchemical Hydra'],
   'Boss (Krystilia)': ['Callisto', "Vet'ion", 'Venenatis', 'Scorpia', 'Chaos Elemental',
     'Chaos Fanatic', 'Crazy archaeologist', 'King Black Dragon', 'Artio', "Calvar'ion", 'Spindel'],
 };
@@ -390,7 +407,7 @@ async function main() {
       const k = taskKey(t.task);
       if (!k) OUT_WARNINGS.push(key + ': no candidate mapping for task "' + t.task + '"');
       const cands = k === 'Boss'
-        ? CANDIDATES[key === 'krystilia' ? 'Boss (Krystilia)' : 'Boss (Duradel/Nieve)']
+        ? CANDIDATES[key === 'krystilia' ? 'Boss (Krystilia)' : key === 'konar' ? 'Boss (Konar)' : 'Boss (Duradel/Nieve)']
         : (CANDIDATES[k] || []);
       return { task: t.task, key: k || t.task, amount: t.amount, extended: t.extended, weight: t.weight, unlock: t.unlockText, monsters: cands };
     });
@@ -416,7 +433,8 @@ async function main() {
 
   // 3. monsters
   const monsterSet = new Set();
-  for (const list of Object.values(masters)) for (const t of list) for (const m of t.monsters) monsterSet.add(m);
+  for (const list of Object.values(masters)) for (const t of list) for (const m of t.monsters)
+    for (const title of (typeof m === 'string' ? [m] : m.monsters)) monsterSet.add(title);
   monsterSet.delete('Revenant dragon'); monsterSet.delete('Revenant ork'); // special-cased
   const titles = [...monsterSet];
   console.log('fetching ' + titles.length + ' monster pages...');
@@ -557,8 +575,92 @@ async function main() {
   }
   if (!items['Coins']) items['Coins'] = { id: null, snap: 1, ha: 1, tradeable: false };
 
+  // 6b. superiors: base monster -> unique-table denominator + slayer XP
+  // source: https://oldschool.runescape.wiki/w/Superior_slayer_monster
+  // spawn 1/200 per on-task kill; per superior: 3 rolls of the base drop
+  // table + two unique tables each at 1/D where D = 200 - (req+55)^2/125.
+  // UDT1: 1/8 imbued heart, 7/16 each dust/mist battlestaff. UDT2: eternal gem.
+  const supWt = await pageWikitext('Superior slayer monster');
+  const superiors = {};
+  {
+    const tStart = supWt.search(/\{\|\s*class="wikitable sortable/);
+    const tEnd = supWt.indexOf('\n|}', tStart);
+    let last = null;
+    for (const row of supWt.slice(tStart, tEnd).split('\n|-').slice(1)) {
+      const links = [...row.matchAll(/\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g)].map(m => m[1]).filter(t => !t.startsWith('File:'));
+      const udtM = row.match(/1\/([\d.]+)/);
+      const xpM = [...row.matchAll(/^\|\s*(?:rowspan="\d+"\s*\|)?\s*([\d,]+)\s*$/gm)].map(m => +m[1].replace(/,/g, ''));
+      if (!links.length) continue;
+      const base = links[0];
+      const entry = udtM ? { D: +udtM[1], xp: xpM.length ? xpM[xpM.length - 1] : null, superior: links[1] || null }
+                         : last; // rowspan continuation shares previous rates
+      if (entry && entry.D) superiors[base] = { D: entry.D, xp: entry.xp, superior: entry.superior };
+      if (udtM) last = entry;
+    }
+  }
+  console.log('superiors:', Object.keys(superiors).length);
+
+  // 6c. slayer reward unlocks & extensions that affect assignments
+  // source: https://oldschool.runescape.wiki/w/Slayer_Rewards (July 2026)
+  // kind: unlock = task locked until bought; inverse = buying LOCKS the task;
+  // extend = extends the task; superior/ggdouble/weight = special effects.
+  const rewards = [
+    { name: 'Seeing Red', cost: 50, kind: 'unlock', task: 'Red dragons' },
+    { name: 'Watch the Birdie', cost: 80, kind: 'unlock', task: 'Aviansie' },
+    { name: 'Hot Stuff', cost: 100, kind: 'unlock', task: 'TzHaar' },
+    { name: 'Reptile Got Ripped', cost: 75, kind: 'unlock', task: 'Lizardmen' },
+    { name: 'Basilocked', cost: 80, kind: 'unlock', task: 'Basilisks' },
+    { name: 'Actual Vampyre Slayer', cost: 80, kind: 'unlock', task: 'Vampyres' },
+    { name: 'Warped Reality', cost: 60, kind: 'unlock', task: 'Warped creatures' },
+    { name: 'Lured In', cost: 80, kind: 'unlock', task: 'Aquanites' },
+    { name: 'Wings Spread', cost: 80, kind: 'unlock', task: 'Gryphons' },
+    { name: 'Like a Boss', cost: 200, kind: 'unlock', task: 'Boss' },
+    { name: 'I Wildy More Slayer', cost: 0, kind: 'unlock', task: 'Abyssal demons', masters: ['krystilia'], also: ['Jellies', 'Dust devils', 'Nechryael'] },
+    { name: 'Stop the Wyvern', cost: 500, kind: 'inverse', task: 'Fossil Island Wyverns' },
+    { name: 'Bigger and Badder', cost: 50, kind: 'superior' },
+    { name: 'Double Trouble', cost: 500, kind: 'ggdouble' },
+    { name: 'Chance of Heavy Frost', cost: 100, kind: 'weight', task: 'Frost dragons', weight: 8 },
+    { name: 'Need More Darkness', cost: 100, kind: 'extend', task: 'Dark beasts' },
+    { name: 'Ankou Very Much', cost: 100, kind: 'extend', task: 'Ankou' },
+    { name: 'Suq-a-nother One', cost: 100, kind: 'extend', task: 'Suqahs' },
+    { name: 'Fire & Darkness', cost: 50, kind: 'extend', task: 'Black dragons' },
+    { name: 'Pedal to the Metals', cost: 200, kind: 'extend', task: 'Metal dragons' },
+    { name: 'Spiritual Fervour', cost: 100, kind: 'extend', task: 'Spiritual creatures' },
+    { name: 'Augment my Abbies', cost: 100, kind: 'extend', task: 'Abyssal demons' },
+    { name: "It's Dark in Here", cost: 100, kind: 'extend', task: 'Black demons' },
+    { name: 'Greater Challenge', cost: 100, kind: 'extend', task: 'Greater demons' },
+    { name: 'Bleed Me Dry', cost: 75, kind: 'extend', task: 'Bloodveld' },
+    { name: 'Smell Ya Later', cost: 100, kind: 'extend', task: 'Aberrant spectres' },
+    { name: 'Birds of a Feather', cost: 100, kind: 'extend', task: 'Aviansie' },
+    { name: 'Horrorific', cost: 100, kind: 'extend', task: 'Cave horrors' },
+    { name: 'To Dust You Shall Return', cost: 100, kind: 'extend', task: 'Dust devils' },
+    { name: 'Wyver-nother One', cost: 100, kind: 'extend', task: 'Skeletal Wyverns' },
+    { name: 'Get Smashed', cost: 100, kind: 'extend', task: 'Gargoyles' },
+    { name: 'Nechs Please', cost: 100, kind: 'extend', task: 'Nechryael' },
+    { name: 'Krack On', cost: 100, kind: 'extend', task: 'Cave kraken' },
+    { name: 'Get Scabaright on It', cost: 50, kind: 'extend', task: 'Scabarites' },
+    { name: 'Wyver-nother Two', cost: 100, kind: 'extend', task: 'Fossil Island Wyverns' },
+    { name: 'Basilonger', cost: 100, kind: 'extend', task: 'Basilisks' },
+    { name: 'More at Stake', cost: 100, kind: 'extend', task: 'Vampyres' },
+    { name: 'Revenenenenenants', cost: 100, kind: 'extend', task: 'Revenants' },
+    { name: 'More eyes than sense', cost: 150, kind: 'extend', task: 'Araxytes' },
+    { name: 'Un-restraining Order', cost: 100, kind: 'extend', task: 'Custodian stalkers' },
+    { name: "Let's Stay All Aquanite", cost: 100, kind: 'extend', task: 'Aquanites' },
+    { name: 'Can of Wyrms', cost: 100, kind: 'extend', task: 'Wyrms' },
+    { name: 'Gryphon and on', cost: 50, kind: 'extend', task: 'Gryphons' },
+    { name: 'I see Dragons', cost: 100, kind: 'extend', task: 'Frost dragons' },
+  ];
+
+  // superior unique item prices
+  for (const [n] of [['Imbued heart'], ['Eternal gem'], ['Dust battlestaff'], ['Mist battlestaff']]) {
+    const m = byName[n.toLowerCase()];
+    if (!m) { items[n] = { id: null, snap: 0, ha: 0, tradeable: false }; continue; }
+    const pr = latest[m.id];
+    items[n] = { id: m.id, snap: pr && (pr.high || pr.low) ? Math.round(((pr.high || pr.low) + (pr.low || pr.high)) / 2) : 0, ha: m.highalch || 0, tradeable: true };
+  }
+
   // 7. emit
-  const out = { builtAt: new Date().toISOString().slice(0, 10), masters, points, monsters, items };
+  const out = { builtAt: new Date().toISOString().slice(0, 10), masters, points, monsters, items, superiors, rewards };
   fs.writeFileSync('data.js', '// Generated by build-data.mjs from the OSRS Wiki on ' + out.builtAt + ' — do not edit by hand.\nconst DATA = ' + JSON.stringify(out) + ';\n');
   fs.writeFileSync('build-warnings.txt', OUT_WARNINGS.join('\n'));
   console.log('monsters: ' + Object.keys(monsters).length + ', items: ' + Object.keys(items).length);

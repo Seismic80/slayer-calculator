@@ -134,6 +134,23 @@
         <input type="checkbox" id="raresOff">
         <label for="raresOff">Toggle rares off — GP as if you never hit a rare drop</label>
       </div>
+      <div class="toggle-row">
+        <input type="checkbox" id="ironman">
+        <label for="ironman">Ironman mode — show banked XP from drops</label>
+      </div>
+      <div class="card" style="padding:10px 12px;margin:0;background:var(--panel2);">
+        <span class="lbl" style="color:var(--muted);font-size:14px;">Bracelets</span>
+        <div class="radio-group">
+          <label><input type="radio" name="bracelet" value="none" checked> None</label>
+          <label><input type="radio" name="bracelet" value="slaughter"> Bracelet of slaughter (&asymp;33% more kills/task)</label>
+          <label><input type="radio" name="bracelet" value="expeditious"> Expeditious bracelet (&asymp;20% fewer kills/task)</label>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Slayer rewards</h2>
+      <p class="hint" style="margin-top:0;">Tick what you've bought from the rewards screen — unlocks gate tasks, extensions raise amounts. Bigger and Badder enables superiors.</p>
+      <div id="rewardsBox"></div>
     </div>
     <div class="card">
       <h2>My current task</h2>
@@ -176,6 +193,7 @@
       <h2 id="detailTitle">Task breakdown</h2>
       <p class="hint" id="detailIntro" style="margin-top:0;"></p>
       <div style="overflow-x:auto;"><table id="detailTable"></table></div>
+      <div id="ironBox" style="margin-top:10px;overflow-x:auto;"></div>
     </div>
 
     <div class="card foot">
@@ -188,6 +206,10 @@
         <li>Konar tasks pay <a href="https://oldschool.runescape.wiki/w/Brimstone_key" target="_blank" rel="noopener">brimstone keys</a> (rate per monster from its wiki page); Krystilia tasks pay <a href="https://oldschool.runescape.wiki/w/Larran%27s_key" target="_blank" rel="noopener">Larran's keys</a> (1/floor(99&minus;(cb&minus;81)&times;49/269) at cb 81+). Konar's per-location restrictions aren't modelled for loot.</li>
         <li>Krystilia's revenant task uses on-task, unskulled revenant rates — see the <a href="https://seismic80.github.io/rev-calculator/" target="_blank" rel="noopener">revenant calculator</a> for the full on-task vs off-task analysis.</li>
         <li>Boss tasks: pick which boss you'd kill in the Kill dropdown; amount is the wiki's 3&ndash;35 roll (Combat Achievements can raise it).</li>
+        <li>GWD room kills: Kree'arra + all three minions count as aviansies (4/room); K'ril + Tstanon Karlak + Zakl'n Gritch count as greater demons (3/room, Balfrug is looted but doesn't count). <a href="https://oldschool.runescape.wiki/w/Slayer_task" target="_blank" rel="noopener">source</a></li>
+        <li><a href="https://oldschool.runescape.wiki/w/Superior_slayer_monster" target="_blank" rel="noopener">Superiors</a>: 1/200 spawn per on-task kill with Bigger and Badder; each gives 3 bonus base-table rolls and rolls two unique tables at 1/(200 &minus; (req+55)&sup2;/125) — heart is 1/8 of the first table, eternal gem is the whole second.</li>
+        <li>Bracelets: slaughter = 25% of kills don't count (&times;4/3 kills per task); expeditious = 25% count double (&times;0.8). Charges/cost not modelled.</li>
+        <li>Ironman banked XP covers gems, herbs (choose your potion), bones (bury/gilded/chaos), dragonhide, smithable bars and ensouled heads. Seeds/farming, secondaries gathering and enchanting magic XP are not counted.</li>
       </ul>
     </div>
   </div>
@@ -200,21 +222,28 @@ const $ = id => document.getElementById(id);
 const CATS = ['rares', 'alchs', 'herbs', 'runes', 'seeds', 'resources', 'supplies', 'other', 'tertiary'];
 const CAT_LABEL = { rares: 'Rares & uniques', alchs: 'Alchables (weapons & armour)', herbs: 'Herbs', runes: 'Runes & ammunition', seeds: 'Seeds', resources: 'Resources', supplies: 'Supplies', other: 'Other', tertiary: 'Tertiary (not counted in GP)' };
 
-/* ---------- state ---------- */
+/* ---------- state (persisted in localStorage; works on GitHub Pages) ---------- */
 let S = {
-  master: 'duradel', pref: 'base', raresOff: false,
+  master: 'duradel', pref: 'base', raresOff: false, bracelet: 'none', ironman: false,
   curTask: null, curAmount: null,
+  rewards: {},          // account-wide slayer reward purchases, by name
+  process: {},          // ironman processing choice per item name
   perMaster: {}, excluded: [],
 };
 try { Object.assign(S, JSON.parse(localStorage.getItem('slayercalc-v1') || '{}')); } catch (e) {}
-function ms() { // per-master state
+if (!S.rewards) S.rewards = {};
+if (!S.process) S.process = {};
+function ms() {
   if (!S.perMaster[S.master]) S.perMaster[S.master] = { skipped: [], blocked: [], locked: [], extended: [], kills: {} };
-  return S.perMaster[S.master];
+  const m = S.perMaster[S.master];
+  for (const k of ['skipped', 'blocked', 'locked', 'extended']) if (!m[k]) m[k] = [];
+  if (!m.kills) m.kills = {};
+  return m;
 }
 function save() { try { localStorage.setItem('slayercalc-v1', JSON.stringify(S)); } catch (e) {} }
 let livePrices = null;
 
-/* ---------- helpers ---------- */
+/* ---------- formatting ---------- */
 function price(name) {
   const it = DATA.items[name];
   if (!it) return 0;
@@ -245,33 +274,59 @@ function larranDenom(cb) {
   return 50;
 }
 
+/* ---------- slayer rewards (unlocks / extensions) ---------- */
+function rewardOn(name) { return !!S.rewards[name]; }
+function rewardsFor(masterKey) {
+  return DATA.rewards.filter(r => !r.masters || r.masters.includes(masterKey));
+}
+function taskRewardIndex() {
+  const idx = {};
+  for (const r of rewardsFor(S.master)) {
+    for (const k of [r.task, ...(r.also || [])].filter(Boolean)) {
+      idx[k] = idx[k] || {};
+      if (r.kind === 'unlock') idx[k].unlock = r.name;
+      if (r.kind === 'inverse') idx[k].inverse = r.name;
+      if (r.kind === 'extend') idx[k].extend = r.name;
+      if (r.kind === 'weight') idx[k].weight = r;
+    }
+  }
+  return idx;
+}
+let REWARD_IDX = {};
+
 /* ---------- model ---------- */
 function taskList() { return DATA.masters[S.master]; }
 function tKey(t) { return t.task; }
 function isSkipped(t) { return ms().skipped.includes(tKey(t)); }
 function isBlocked(t) { return ms().blocked.includes(tKey(t)); }
-function isLocked(t) { return ms().locked.includes(tKey(t)); }
-function isExtended(t) { return t.extended && ms().extended.includes(tKey(t)); }
+function isLocked(t) {
+  if (ms().locked.includes(tKey(t))) return true;
+  const r = REWARD_IDX[t.key];
+  if (r && r.unlock && !rewardOn(r.unlock)) return true;
+  if (r && r.inverse && rewardOn(r.inverse)) return true;
+  return false;
+}
+function isExtended(t) {
+  if (!t.extended) return false;
+  const r = REWARD_IDX[t.key];
+  if (r && r.extend) return rewardOn(r.extend);
+  return ms().extended.includes(tKey(t));
+}
+function effWeight(t) {
+  const r = REWARD_IDX[t.key];
+  if (r && r.weight && rewardOn(r.weight.name)) return r.weight.weight;
+  return t.weight;
+}
 function toggleIn(arr, v) { const i = arr.indexOf(v); if (i >= 0) arr.splice(i, 1); else arr.push(v); }
+function braceletMult() { return S.bracelet === 'slaughter' ? 4 / 3 : S.bracelet === 'expeditious' ? 0.8 : 1; }
 
-function chosenMonster(t) {
-  const o = ms().kills[tKey(t)];
-  if (o && t.monsters.includes(o)) return o;
-  if (S.pref === 'best') {
-    let best = null, bestEv = -1;
-    for (const m of t.monsters) {
-      if (!DATA.monsters[m]) continue;
-      const ev = evPerKill(m).gp;
-      if (ev > bestEv) { bestEv = ev; best = m; }
-    }
-    if (best) return best;
-  }
-  return t.monsters.find(m => DATA.monsters[m]) || null;
+function unitsOf(t) {
+  return t.monsters.map(m => typeof m === 'string'
+    ? { id: m, label: m, monsters: [m], count: 1 }
+    : { id: 'c:' + m.label, label: m.label, monsters: m.monsters, count: m.count, ggdouble: !!m.ggdouble })
+    .filter(u => u.monsters.every(x => DATA.monsters[x]));
 }
-function avgAmount(t) {
-  const r = isExtended(t) ? t.extended : (t.amount || t.extended);
-  return r ? (r[0] + r[1]) / 2 : 0;
-}
+function unitCount(u) { return u.ggdouble && rewardOn('Double Trouble') ? 2 : u.count; }
 const excludedSet = () => new Set(S.excluded);
 function evPerKill(monName) {
   const mon = DATA.monsters[monName];
@@ -289,14 +344,62 @@ function evPerKill(monName) {
   }
   return { gp, rareP, xp: mon.slayxp || mon.hp || 0 };
 }
-function uniqueChance(monName, n) {
-  const mon = DATA.monsters[monName];
-  if (!mon) return 0;
-  let stay = 1;
-  for (const d of mon.drops) if (d.cat === 'rares') stay *= Math.pow(1 - d.rate, n);
-  return 1 - stay;
+function unitEV(u) {
+  let gp = 0, xp = 0; const rareP = [];
+  for (const m of u.monsters) { const e = evPerKill(m); gp += e.gp; xp += e.xp; rareP.push(...e.rareP); }
+  return { gp, xp, rareP };
 }
-// long-run average points per completed task (milestones included)
+function chosenUnit(t) {
+  const units = unitsOf(t);
+  if (!units.length) return null;
+  const saved = ms().kills[tKey(t)];
+  const found = units.find(u => u.id === saved);
+  if (found) return found;
+  if (S.pref === 'best') {
+    let best = units[0], bestV = -1;
+    for (const u of units) {
+      const v = unitEV(u).gp / unitCount(u);
+      if (v > bestV) { bestV = v; best = u; }
+    }
+    return best;
+  }
+  return units[0];
+}
+function avgAmount(t) {
+  const r = isExtended(t) ? t.extended : (t.amount || t.extended);
+  return r ? (r[0] + r[1]) / 2 : 0;
+}
+function superiorFor(t, u) {
+  if (!rewardOn('Bigger and Badder')) return null;
+  if (t.key === 'Boss' || u.monsters.length !== 1) return null;
+  return DATA.superiors[u.monsters[0]] || null;
+}
+function superiorUniqueEV(D) {
+  return (price('Imbued heart') / 8 + price('Eternal gem') + (price('Dust battlestaff') + price('Mist battlestaff')) * 7 / 16) / D;
+}
+// full per-task metrics for a given task amount (before bracelet multiplier)
+function taskMetrics(t, amount) {
+  const u = chosenUnit(t);
+  if (!u) return { unit: null, kills: 0, gp: 0, xp: 0, uniq: 0, sup: null };
+  const kills = amount * braceletMult();       // monsters actually slain
+  const units = kills / unitCount(u);          // unit kills (rooms, trios, singles)
+  const ev = unitEV(u);
+  let gp = units * ev.gp, xp = units * ev.xp;
+  let stay = 1;
+  for (const p of ev.rareP) stay *= Math.pow(1 - p, units);
+  let sup = null;
+  const supData = superiorFor(t, u);
+  if (supData) {
+    const nSup = units / 200; // 1/200 spawn per on-task kill
+    const base = evPerKill(u.monsters[0]);
+    gp += nSup * (3 * base.gp + (S.raresOff ? 0 : superiorUniqueEV(supData.D)));
+    xp += nSup * (supData.xp || 0);
+    const pHeart = (1 / 200) / (8 * supData.D), pGem = (1 / 200) / supData.D, pStaff = (1 / 200) * 14 / (16 * supData.D);
+    stay *= Math.pow(1 - pHeart, units) * Math.pow(1 - pGem, units) * Math.pow(1 - pStaff, units);
+    sup = { ...supData, nSup, pHeart: 1 - Math.pow(1 - pHeart, units), pGem: 1 - Math.pow(1 - pGem, units), baseGp: base.gp };
+  }
+  return { unit: u, kills, units, gp, xp, uniq: 1 - stay, sup };
+}
 function avgPoints(masterKey) {
   const p = DATA.points[masterKey];
   if (!p || !p.base) return 0;
@@ -310,9 +413,54 @@ function avgPoints(masterKey) {
 }
 function pool() { return taskList().filter(t => !isBlocked(t) && !isLocked(t)); }
 
+/* ---------- ironman banked XP ----------
+   Per-item processing options: [label, {Skill: xp per item}].
+   Standard wiki XP values; potion values = cleaning + brewing the potion. */
+const PROCESS = {
+  'Uncut sapphire':    [['Cut gem', { Crafting: 50 }], ['Games necklace', { Crafting: 105 }], ['Ring of recoil', { Crafting: 90 }]],
+  'Uncut emerald':     [['Cut gem', { Crafting: 67.5 }], ['Ring of dueling', { Crafting: 122.5 }]],
+  'Uncut ruby':        [['Cut gem', { Crafting: 85 }], ['Amulet of strength', { Crafting: 170 }]],
+  'Uncut diamond':     [['Cut gem', { Crafting: 107.5 }], ['Amulet of power', { Crafting: 207.5 }]],
+  'Uncut dragonstone': [['Cut gem', { Crafting: 137.5 }], ['Amulet of glory', { Crafting: 287.5 }]],
+  'Grimy guam leaf':   [['Clean', { Herblore: 2.5 }], ['Attack potion', { Herblore: 27.5 }]],
+  'Grimy marrentill':  [['Clean', { Herblore: 3.8 }], ['Antipoison', { Herblore: 41.3 }]],
+  'Grimy tarromin':    [['Clean', { Herblore: 5 }], ['Strength potion', { Herblore: 55 }]],
+  'Grimy harralander': [['Clean', { Herblore: 6.3 }], ['Restore potion', { Herblore: 68.8 }]],
+  'Grimy ranarr weed': [['Clean', { Herblore: 7.5 }], ['Prayer potion', { Herblore: 95 }], ['Defence potion', { Herblore: 82.5 }]],
+  'Grimy toadflax':    [['Clean', { Herblore: 8 }], ['Saradomin brew', { Herblore: 188 }], ['Agility potion', { Herblore: 88 }]],
+  'Grimy irit leaf':   [['Clean', { Herblore: 8.8 }], ['Super attack', { Herblore: 108.8 }], ['Superantipoison', { Herblore: 115.5 }]],
+  'Grimy avantoe':     [['Clean', { Herblore: 10 }], ['Super energy', { Herblore: 127.5 }], ['Hunter potion', { Herblore: 130 }]],
+  'Grimy kwuarm':      [['Clean', { Herblore: 11.3 }], ['Super strength', { Herblore: 136.3 }]],
+  'Grimy snapdragon':  [['Clean', { Herblore: 11.8 }], ['Super restore', { Herblore: 154.3 }], ['Sanfew serum', { Herblore: 171.8 }]],
+  'Grimy cadantine':   [['Clean', { Herblore: 12.5 }], ['Super defence', { Herblore: 162.5 }]],
+  'Grimy lantadyme':   [['Clean', { Herblore: 13.1 }], ['Antifire potion', { Herblore: 170.6 }], ['Magic potion', { Herblore: 170.6 }]],
+  'Grimy dwarf weed':  [['Clean', { Herblore: 13.8 }], ['Ranging potion', { Herblore: 176.3 }]],
+  'Grimy torstol':     [['Clean', { Herblore: 15 }], ['Super combat potion', { Herblore: 165 }], ['Zamorak brew', { Herblore: 190 }]],
+  'Bones':             boneOpts(4.5), 'Big bones': boneOpts(15), 'Babydragon bones': boneOpts(30),
+  'Dragon bones':      boneOpts(72), 'Wyvern bones': boneOpts(72), 'Lava dragon bones': boneOpts(85),
+  'Dagannoth bones':   boneOpts(125), 'Drake bones': boneOpts(80), 'Hydra bones': boneOpts(110),
+  'Wyrm bones':        boneOpts(50), 'Superior dragon bones': boneOpts(150),
+  'Green dragonhide':  [['Craft d\'hide body', { Crafting: 62 }]],
+  'Blue dragonhide':   [['Craft d\'hide body', { Crafting: 70 }]],
+  'Red dragonhide':    [['Craft d\'hide body', { Crafting: 78 }]],
+  'Black dragonhide':  [['Craft d\'hide body', { Crafting: 86 }]],
+  'Runite bar':        [['Smith', { Smithing: 75 }]],
+  'Adamantite bar':    [['Smith', { Smithing: 62.5 }]],
+  'Mithril bar':       [['Smith', { Smithing: 50 }]],
+  'Steel bar':         [['Smith', { Smithing: 37.5 }]],
+  'Ensouled abyssal head': [['Reanimate', { Prayer: 1300 }]],
+  'Ensouled dragon head':  [['Reanimate', { Prayer: 1560 }]],
+  'Ensouled demon head':   [['Reanimate', { Prayer: 1170 }]],
+};
+function boneOpts(xp) {
+  return [['Bury', { Prayer: xp }], ['Gilded altar', { Prayer: xp * 3.5 }], ['Chaos altar (avg)', { Prayer: xp * 7 }]];
+}
+
 /* ---------- rendering ---------- */
 let sortBy = 'gp';
 function render() {
+  REWARD_IDX = taskRewardIndex();
+  renderRewards();
   renderPoints();
   renderTasks();
   renderDetail();
@@ -320,14 +468,37 @@ function render() {
   $('builtDate').textContent = DATA.builtAt;
 }
 
+function renderRewards() {
+  const keys = new Set(taskList().map(t => t.key));
+  const rs = rewardsFor(S.master).filter(r =>
+    r.kind === 'superior' || r.kind === 'ggdouble' ||
+    (r.task && (keys.has(r.task) || (r.also || []).some(k => keys.has(k)))));
+  const groups = [
+    ['Unlocks', rs.filter(r => r.kind !== 'extend')],
+    ['Extensions', rs.filter(r => r.kind === 'extend')],
+  ];
+  let html = '';
+  for (const [label, list] of groups) {
+    if (!list.length) continue;
+    html += '<div class="lbl" style="color:var(--muted);font-size:14px;margin:6px 0 4px;">' + label + '</div><div class="radio-group" style="grid-template-columns:1fr 1fr;">';
+    for (const r of list) {
+      const extra = r.kind === 'inverse' ? ' (blocks task)' : r.kind === 'superior' ? ' (superiors)' : r.kind === 'ggdouble' ? ' (GG counts 2)' : r.kind === 'weight' ? ' (weight ' + r.weight + ')' : '';
+      html += '<label title="' + esc(r.task || '') + extra + '"><input type="checkbox" data-reward="' + esc(r.name) + '"' +
+        (rewardOn(r.name) ? ' checked' : '') + '> ' + esc(r.name) + ' <span class="hint">(' + r.cost + ')</span></label>';
+    }
+    html += '</div>';
+  }
+  $('rewardsBox').innerHTML = html;
+}
+
 function renderPoints() {
   const P = pool();
-  const totW = P.reduce((a, t) => a + t.weight, 0);
-  const pSkip = totW ? P.filter(isSkipped).reduce((a, t) => a + t.weight, 0) / totW : 0;
+  const totW = P.reduce((a, t) => a + effWeight(t), 0);
+  const pSkip = totW ? P.filter(isSkipped).reduce((a, t) => a + effWeight(t), 0) / totW : 0;
   const avg = avgPoints(S.master);
   const skipCost = pSkip < 1 ? 30 * pSkip / (1 - pSkip) : Infinity;
   const net = avg - skipCost;
-  const maxSkip = avg / (avg + 30); // break-even skip fraction
+  const maxSkip = avg / (avg + 30);
   let html = '<div class="verdict-line ' + (net >= 0 ? 'good' : 'bad') + '">' +
     (isFinite(net)
       ? (net >= 0 ? 'Sustainable: ' : 'Point-negative: ') + '≈' + fmtNum(net, 1) + ' points per completed task after skips'
@@ -344,23 +515,15 @@ function renderPoints() {
 
 function renderTasks() {
   const P = pool();
-  const totW = P.reduce((a, t) => a + t.weight, 0);
+  const totW = P.reduce((a, t) => a + effWeight(t), 0);
   const rows = taskList().map(t => {
-    const mon = chosenMonster(t);
-    const n = avgAmount(t);
-    const ev = mon ? evPerKill(mon) : { gp: 0, xp: 0 };
     const receivable = !isBlocked(t) && !isLocked(t);
-    return {
-      t, mon, n,
-      chance: receivable && totW ? t.weight / totW : 0,
-      xp: mon ? n * ev.xp : 0,
-      gp: mon ? n * ev.gp : 0,
-      uniq: mon ? uniqueChance(mon, n) : 0,
-    };
+    const m = taskMetrics(t, avgAmount(t));
+    return { t, m, n: avgAmount(t), chance: receivable && totW ? effWeight(t) / totW : 0 };
   });
   rows.sort((a, b) => sortBy === 'name' ? a.t.task.localeCompare(b.t.task)
     : sortBy === 'chance' ? b.chance - a.chance
-    : sortBy === 'xp' ? b.xp - a.xp : b.gp - a.gp);
+    : sortBy === 'xp' ? b.m.xp - a.m.xp : b.m.gp - a.m.gp);
 
   let html = '<thead><tr>' +
     '<th class="sortable" data-sort="name">Task</th>' +
@@ -371,23 +534,24 @@ function renderTasks() {
     '<th>Uniques</th><th>Flags</th></tr></thead><tbody>';
   for (const r of rows) {
     const t = r.t;
+    const units = unitsOf(t);
     const cls = ['task-row'];
     if (isSkipped(t)) cls.push('skipped');
     if (isBlocked(t)) cls.push('blocked');
     if (isLocked(t)) cls.push('locked');
     if (S.curTask === tKey(t)) cls.push('current');
-    const killSel = t.monsters.length > 1
-      ? '<select class="killsel" data-task="' + esc(tKey(t)) + '">' + t.monsters.filter(m => DATA.monsters[m]).map(m =>
-          '<option value="' + esc(m) + '"' + (m === r.mon ? ' selected' : '') + '>' + esc(m) + '</option>').join('') + '</select>'
-      : esc(r.mon || '—');
+    const killSel = units.length > 1
+      ? '<select class="killsel" data-task="' + esc(tKey(t)) + '">' + units.map(u =>
+          '<option value="' + esc(u.id) + '"' + (r.m.unit && u.id === r.m.unit.id ? ' selected' : '') + '>' + esc(u.label) + '</option>').join('') + '</select>'
+      : esc(r.m.unit ? r.m.unit.label : '—');
     html += '<tr class="' + cls.join(' ') + '" data-task="' + esc(tKey(t)) + '" title="Left-click: plan to skip">' +
       '<td>' + esc(t.task) + '</td>' +
       '<td class="num">' + (r.chance ? (r.chance * 100).toFixed(1) + '%' : '—') + '</td>' +
       '<td class="num">' + fmtNum(r.n) + '</td>' +
       '<td style="text-align:left">' + killSel + '</td>' +
-      '<td class="num">' + fmtNum(r.xp) + '</td>' +
-      '<td class="num">' + gpSpan(r.gp) + '</td>' +
-      '<td class="num">' + (r.uniq * 100).toFixed(1) + '%</td>' +
+      '<td class="num">' + fmtNum(r.m.xp) + '</td>' +
+      '<td class="num">' + gpSpan(r.m.gp) + '</td>' +
+      '<td class="num">' + (r.m.uniq * 100).toFixed(1) + '%</td>' +
       '<td>' +
         (t.extended ? '<span class="flag' + (isExtended(t) ? ' on' : '') + '" data-flag="extended" data-task="' + esc(tKey(t)) + '" title="Extended">E</span>' : '') +
         '<span class="flag' + (isBlocked(t) ? ' on' : '') + '" data-flag="blocked" data-task="' + esc(tKey(t)) + '" title="Blocked">B</span>' +
@@ -400,47 +564,112 @@ function renderTasks() {
 function renderDetail() {
   const t = taskList().find(x => tKey(x) === S.curTask) || taskList()[0];
   if (!t) return;
-  const mon = chosenMonster(t);
-  const monData = mon && DATA.monsters[mon];
-  const n = S.curAmount || Math.round(avgAmount(t));
-  $('detailTitle').textContent = 'Task breakdown: ' + n + ' ' + t.task + (mon ? ' (killing ' + mon + ')' : '');
-  if (!monData) { $('detailIntro').textContent = 'No drop data for this task.'; $('detailTable').innerHTML = ''; return; }
-  const xp = n * (monData.slayxp || monData.hp || 0);
-  const uniq = uniqueChance(mon, n);
-  const ex = excludedSet();
-  $('detailIntro').innerHTML = fmtNum(xp) + ' Slayer XP &middot; ' + (uniq * 100).toFixed(1) + '% chance of at least one rare' +
-    (S.raresOff ? ' &middot; <b>rares excluded from GP</b>' : '') +
+  const amount = S.curAmount || Math.round(avgAmount(t));
+  const m = taskMetrics(t, amount);
+  $('detailTitle').textContent = 'Task breakdown: ' + amount + ' ' + t.task + (m.unit ? ' (killing ' + m.unit.label + ')' : '');
+  if (!m.unit) { $('detailIntro').textContent = 'No drop data for this task.'; $('detailTable').innerHTML = ''; $('ironBox').innerHTML = ''; return; }
+
+  const braceletNote = S.bracelet !== 'none'
+    ? ' &middot; ' + (S.bracelet === 'slaughter' ? 'slaughter: ≈' + fmtNum(m.kills) + ' actual kills' : 'expeditious: ≈' + fmtNum(m.kills) + ' actual kills') : '';
+  let supNote = '';
+  if (m.sup) supNote = ' &middot; superiors: ' + (m.sup.pHeart * 100).toFixed(2) + '% imbued heart, ' + (m.sup.pGem * 100).toFixed(2) + '% eternal gem';
+  $('detailIntro').innerHTML = fmtNum(m.xp) + ' Slayer XP &middot; ' + (m.uniq * 100).toFixed(1) + '% chance of ≥1 rare' +
+    braceletNote + supNote + (S.raresOff ? ' &middot; <b>rares excluded from GP</b>' : '') +
     '.<br><b>Left-click a drop to toggle it as left on the ground</b> — excluded from every GP total (planner too).';
 
-  // Larran's key synthetic line for Krystilia
-  const drops = monData.drops.slice();
-  if (S.master === 'krystilia' && monData.combat != null) {
-    drops.push({ name: "Larran's key", qty: 1, rate: 1 / larranDenom(monData.combat), cat: 'tertiary', synthetic: true });
+  // merge drops across the unit's monsters: name+cat -> expected per unit kill
+  const merged = new Map();
+  for (const monName of m.unit.monsters) {
+    const mon = DATA.monsters[monName];
+    for (const d of mon.drops) {
+      if (d.name === 'Brimstone key' && S.master !== 'konar') continue; // Konar-only tertiary
+      const k = d.name + '|' + d.cat;
+      const e = merged.get(k) || { name: d.name, cat: d.cat, perUnit: 0, rate: d.rate, single: m.unit.monsters.length === 1 };
+      e.perUnit += d.rate * d.qty;
+      merged.set(k, e);
+    }
   }
-  let html = '<thead><tr><th>Item</th><th>Rate/kill</th><th>Avg qty</th><th>Price</th><th>Expected #</th><th>GP</th></tr></thead><tbody>';
+  if (S.master === 'krystilia') {
+    const cb = DATA.monsters[m.unit.monsters[0]].combat;
+    if (cb != null) merged.set("Larran's key", { name: "Larran's key", cat: 'tertiary', perUnit: m.unit.monsters.length / larranDenom(cb), rate: 1 / larranDenom(cb), single: true });
+  }
+  const drops = [...merged.values()];
+  const ex = excludedSet();
+
+  let html = '<thead><tr><th>Item</th><th>Rate/kill</th><th>Price</th><th>Expected #</th><th>GP</th></tr></thead><tbody>';
   let grand = 0;
+  const expected = {}; // item -> expected count (for ironman XP)
   for (const cat of CATS) {
-    const items = drops.filter(d => d.cat === cat).sort((a, b) => b.rate * b.qty * price(b.name) - a.rate * a.qty * price(a.name));
+    const items = drops.filter(d => d.cat === cat).sort((a, b) => b.perUnit * price(b.name) - a.perUnit * price(a.name));
     if (!items.length) continue;
-    html += '<tr class="group-head"><td colspan="6">' + CAT_LABEL[cat] + '</td></tr>';
+    html += '<tr class="group-head"><td colspan="5">' + CAT_LABEL[cat] + '</td></tr>';
     let sub = 0;
     for (const d of items) {
       const off = ex.has(d.name);
       const counted = cat !== 'tertiary' && !(S.raresOff && cat === 'rares') && !off;
-      const gp = d.rate * d.qty * price(d.name) * n;
+      const n = d.perUnit * m.units;
+      expected[d.name] = (expected[d.name] || 0) + n;
+      const gp = n * price(d.name);
       if (counted) sub += gp;
       html += '<tr class="loot-row' + (off ? ' excluded' : '') + '" data-item="' + esc(d.name) + '">' +
-        '<td>' + esc(d.name) + '</td><td class="num">' + fmtRate(d.rate) + '</td>' +
-        '<td class="num">' + fmtNum(d.qty, d.qty % 1 ? 1 : 0) + '</td>' +
+        '<td>' + esc(d.name) + '</td><td class="num">' + (d.single ? fmtRate(d.rate) : '—') + '</td>' +
         '<td class="num">' + gpSpan(price(d.name)) + '</td>' +
-        '<td class="num">' + fmtNum(d.rate * n, 2) + '</td>' +
+        '<td class="num">' + fmtNum(n, n < 10 ? 2 : 0) + '</td>' +
         '<td class="num">' + (counted ? gpSpan(gp) : '<span class="hint">(' + fmtGP(gp) + ')</span>') + '</td></tr>';
     }
     grand += sub;
-    html += '<tr class="subtotal"><td colspan="5">' + CAT_LABEL[cat] + ' subtotal</td><td class="num">' + gpSpan(sub) + '</td></tr>';
+    html += '<tr class="subtotal"><td colspan="4">' + CAT_LABEL[cat] + ' subtotal</td><td class="num">' + gpSpan(sub) + '</td></tr>';
   }
-  html += '<tr class="grand"><td colspan="5">Expected loot from this task' + (S.raresOff ? ' (no rares)' : '') + '</td><td class="num">' + gpSpan(grand) + '</td></tr>';
+  if (m.sup) {
+    html += '<tr class="group-head"><td colspan="5">Superior spawns (Bigger and Badder, 1/200)</td></tr>';
+    const D = m.sup.D;
+    const supRows = [
+      ['Imbued heart', m.sup.nSup / (8 * D)], ['Eternal gem', m.sup.nSup / D],
+      ['Dust battlestaff', m.sup.nSup * 7 / (16 * D)], ['Mist battlestaff', m.sup.nSup * 7 / (16 * D)],
+    ];
+    let sub = 0;
+    for (const [name, n] of supRows) {
+      const gp = n * price(name);
+      if (!S.raresOff) sub += gp;
+      html += '<tr><td>' + name + '</td><td class="num">—</td><td class="num">' + gpSpan(price(name)) +
+        '</td><td class="num">' + fmtNum(n, 4) + '</td><td class="num">' + (S.raresOff ? '<span class="hint">(' + fmtGP(gp) + ')</span>' : gpSpan(gp)) + '</td></tr>';
+    }
+    const rollsGp = m.sup.nSup * 3 * m.sup.baseGp;
+    sub += rollsGp;
+    html += '<tr><td>3 bonus base-table rolls (' + fmtNum(m.sup.nSup, 2) + ' superiors)</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">' + gpSpan(rollsGp) + '</td></tr>';
+    grand += sub;
+    html += '<tr class="subtotal"><td colspan="4">Superiors subtotal</td><td class="num">' + gpSpan(sub) + '</td></tr>';
+  }
+  html += '<tr class="grand"><td colspan="4">Expected loot from this task' + (S.raresOff ? ' (no rares)' : '') + '</td><td class="num">' + gpSpan(grand) + '</td></tr>';
   $('detailTable').innerHTML = html + '</tbody>';
+
+  renderIronman(expected);
+}
+
+function renderIronman(expected) {
+  if (!S.ironman) { $('ironBox').innerHTML = ''; return; }
+  const rows = Object.keys(expected).filter(n => PROCESS[n] && expected[n] > 0.005).sort();
+  if (!rows.length) { $('ironBox').innerHTML = '<p class="hint">No processable drops on this task.</p>'; return; }
+  let html = '<table><thead><tr><th>Drop</th><th>Expected #</th><th>Processed into</th><th>Banked XP</th></tr></thead><tbody>';
+  const skillTotals = {};
+  for (const name of rows) {
+    const opts = PROCESS[name];
+    const sel = Math.min(S.process[name] || 0, opts.length - 1);
+    const [label, xpMap] = opts[sel];
+    let cell = '';
+    for (const [skill, xp] of Object.entries(xpMap)) {
+      const total = xp * expected[name];
+      skillTotals[skill] = (skillTotals[skill] || 0) + total;
+      cell += fmtNum(total) + ' ' + skill + ' ';
+    }
+    html += '<tr><td>' + esc(name) + '</td><td class="num">' + fmtNum(expected[name], expected[name] < 10 ? 2 : 0) + '</td>' +
+      '<td style="text-align:left"><select class="killsel" data-process="' + esc(name) + '">' +
+      opts.map((o, i) => '<option value="' + i + '"' + (i === sel ? ' selected' : '') + '>' + esc(o[0]) + '</option>').join('') +
+      '</select></td><td class="num">' + cell + '</td></tr>';
+  }
+  html += '<tr class="grand"><td colspan="3">Total banked XP</td><td class="num">' +
+    Object.entries(skillTotals).map(([s, v]) => fmtNum(v) + ' ' + s).join(' &middot; ') + '</td></tr></tbody></table>';
+  $('ironBox').innerHTML = html;
 }
 
 /* ---------- self-checks ---------- */
@@ -454,8 +683,13 @@ function selfTest() {
   // hand-computed: (900×15 + 80×75 + 8×225 + 8×375 + 3×525 + 750) / 1000 = 26.625
   t.push(['Duradel avg points = 26.6/task', Math.abs(avgPoints('duradel') - 26.625) < 0.01]);
   t.push(["Larran's key 1/89 at cb 135", larranDenom(135) === 89]);
-  const P = pool(), totW = P.reduce((a, x) => a + x.weight, 0);
-  t.push(['Pool chances sum to 100%', !P.length || Math.abs(P.reduce((a, x) => a + x.weight / totW, 0) - 1) < 1e-9]);
+  const avi = DATA.masters.duradel.find(x => x.key === 'Aviansie');
+  const kree = unitsOf(avi).find(u => u.monsters.length > 1);
+  t.push(["Kree'arra room counts 4 aviansies", kree && kree.count === 4]);
+  // superior UDT denominator: abyssal demon req 85 → 200 − 140²/125 = 43.2
+  t.push(['Abyssal superior UDT 1/43.2', DATA.superiors['Abyssal demon'] && DATA.superiors['Abyssal demon'].D === 43.2]);
+  const P = pool(), totW = P.reduce((a, x) => a + effWeight(x), 0);
+  t.push(['Pool chances sum to 100%', !P.length || Math.abs(P.reduce((a, x) => a + effWeight(x) / totW, 0) - 1) < 1e-9]);
   $('selftest').innerHTML = '<h2>Self-checks</h2>' + t.map(([n, ok]) =>
     '<div class="' + (ok ? 'ok' : 'fail') + '">' + (ok ? '✓' : '✗ FAIL') + ' ' + n + '</div>').join('');
 }
@@ -493,24 +727,43 @@ function fillCurTask() {
   $('curAmount').value = S.curAmount || Math.round(avgAmount(t));
 }
 function init() {
+  REWARD_IDX = taskRewardIndex();
   $('master').value = S.master;
   document.querySelector('input[name=pref][value=' + S.pref + ']').checked = true;
+  document.querySelector('input[name=bracelet][value=' + S.bracelet + ']').checked = true;
   $('raresOff').checked = S.raresOff;
+  $('ironman').checked = S.ironman;
   fillCurTask();
 
-  $('master').addEventListener('change', () => { S.master = $('master').value; S.curAmount = null; fillCurTask(); save(); render(); });
+  $('master').addEventListener('change', () => { S.master = $('master').value; S.curAmount = null; REWARD_IDX = taskRewardIndex(); fillCurTask(); save(); render(); });
   document.querySelectorAll('input[name=pref]').forEach(r => r.addEventListener('change', () => {
     S.pref = document.querySelector('input[name=pref]:checked').value; save(); render();
   }));
+  document.querySelectorAll('input[name=bracelet]').forEach(r => r.addEventListener('change', () => {
+    S.bracelet = document.querySelector('input[name=bracelet]:checked').value; save(); render();
+  }));
   $('raresOff').addEventListener('change', () => { S.raresOff = $('raresOff').checked; save(); render(); });
+  $('ironman').addEventListener('change', () => { S.ironman = $('ironman').checked; save(); render(); });
   $('curTask').addEventListener('change', () => { S.curTask = $('curTask').value; S.curAmount = null; fillCurTask(); save(); render(); });
   $('curAmount').addEventListener('input', () => { S.curAmount = Math.max(1, parseInt($('curAmount').value) || 1); save(); renderDetail(); });
   $('refreshPrices').addEventListener('click', refreshPrices);
 
+  $('rewardsBox').addEventListener('change', e => {
+    const cb = e.target.closest('input[data-reward]');
+    if (!cb) return;
+    S.rewards[cb.dataset.reward] = cb.checked;
+    save(); render();
+  });
   $('taskTable').addEventListener('click', e => {
+    const th = e.target.closest('th.sortable');
+    if (th) { sortBy = th.dataset.sort; renderTasks(); return; }
     const flag = e.target.closest('.flag');
     if (flag) {
-      toggleIn(ms()[flag.dataset.flag], flag.dataset.task);
+      const t = taskList().find(x => tKey(x) === flag.dataset.task);
+      const r = t && REWARD_IDX[t.key];
+      if (flag.dataset.flag === 'extended' && r && r.extend) S.rewards[r.extend] = !rewardOn(r.extend);
+      else if (flag.dataset.flag === 'locked' && r && r.unlock && !ms().locked.includes(flag.dataset.task) && !rewardOn(r.unlock)) S.rewards[r.unlock] = true; // unlocking via flag
+      else toggleIn(ms()[flag.dataset.flag], flag.dataset.task);
       save(); render();
       return;
     }
@@ -526,15 +779,17 @@ function init() {
     ms().kills[sel.dataset.task] = sel.value;
     save(); render();
   });
-  $('taskTable').addEventListener('click', e => {
-    const th = e.target.closest('th.sortable');
-    if (th) { sortBy = th.dataset.sort; renderTasks(); }
-  });
   $('detailTable').addEventListener('click', e => {
     const tr = e.target.closest('tr.loot-row');
     if (!tr) return;
     toggleIn(S.excluded, tr.dataset.item);
     save(); render();
+  });
+  $('ironBox').addEventListener('change', e => {
+    const sel = e.target.closest('select[data-process]');
+    if (!sel) return;
+    S.process[sel.dataset.process] = +sel.value;
+    save(); renderDetail();
   });
 
   render();
