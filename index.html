@@ -116,7 +116,7 @@
       <h2>Setup</h2>
       <label class="field"><span class="lbl">RuneScape name (optional)</span>
         <div style="display:flex;gap:6px;"><input type="text" id="rsn" placeholder="RSN"><button id="fetchStats">Fetch</button></div>
-        <div class="hint" id="rsnStatus">Stats auto-lock tasks you can't receive and gate ironman processing (via Wise Old Man).</div>
+        <div class="hint" id="rsnStatus">Live hiscores lookup (same source as the wiki calculators). Stats auto-lock tasks and gate ironman processing.</div>
       </label>
       <label class="field"><span class="lbl">Slayer master</span>
         <select id="master">
@@ -828,20 +828,41 @@ async function fetchStats() {
   if (!rsn) { S.rsn = ''; S.stats = null; save(); st.textContent = 'Stats cleared — no level gating.'; render(); return; }
   st.textContent = 'Looking up ' + rsn + '…';
   try {
+    S.stats = await fetchHiscores(rsn);
+    S.rsn = rsn;
+    save(); statsSummary(); render();
+  } catch (e) {
+    st.textContent = 'Lookup failed (' + e.message + ') — name not on the hiscores?';
+  }
+}
+// Live official hiscores through the OSRS Wiki's CORS proxy — the same
+// endpoint the wiki's own calculators use. Falls back to Wise Old Man.
+const HS_SKILLS = ['overall', 'attack', 'defence', 'strength', 'hitpoints', 'ranged', 'prayer', 'magic',
+  'cooking', 'woodcutting', 'fletching', 'fishing', 'firemaking', 'crafting', 'smithing', 'mining',
+  'herblore', 'agility', 'thieving', 'slayer', 'farming', 'runecrafting', 'hunter', 'construction'];
+async function fetchHiscores(rsn) {
+  try {
+    const res = await fetch('https://oldschool.runescape.wiki/cors/m=hiscore_oldschool/index_lite.ws?player=' + encodeURIComponent(rsn.replace(/\s+/g, '_')));
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const lines = (await res.text()).trim().split(/\n+/);
+    const stats = {};
+    HS_SKILLS.forEach((k, i) => {
+      const parts = (lines[i] || '').split(',');
+      stats[k] = Math.max(1, parseInt(parts[1]) || 1);
+    });
+    if (!stats.slayer || !stats.overall) throw new Error('bad response');
+    return stats;
+  } catch (e) {
+    // fallback: Wise Old Man snapshot (may be stale)
     let res = await fetch('https://api.wiseoldman.net/v2/players/' + encodeURIComponent(rsn));
     if (res.status === 404) res = await fetch('https://api.wiseoldman.net/v2/players/' + encodeURIComponent(rsn), { method: 'POST' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const j = await res.json();
     const skills = j.latestSnapshot && j.latestSnapshot.data && j.latestSnapshot.data.skills;
-    if (!skills) throw new Error('no stats snapshot yet — try again in a minute');
+    if (!skills) throw new Error('no stats found');
     const stats = {};
     for (const [k, v] of Object.entries(skills)) stats[k] = v.level;
-    S.rsn = rsn; S.stats = stats;
-    save();
-    statsSummary();
-    render();
-  } catch (e) {
-    st.textContent = 'Lookup failed (' + e.message + ').';
+    return stats;
   }
 }
 function statsSummary() {
