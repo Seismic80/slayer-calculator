@@ -285,7 +285,9 @@ function extractTemplates(wt, name) {
 }
 function parseQty(s) {
   if (!s) return 1;
-  s = s.replace(/\(noted\)/gi, '').replace(/,/g, '').trim();
+  s = s.replace(/\(noted\)/gi, '').trim();
+  // DropsLine treats commas as "either/or" separators (933,1400 = 933 or
+  // 1400), never as thousands separators — numbers are written raw.
   const parts = s.split(/[;,]/).map(p => p.trim()).filter(Boolean);
   const vals = [];
   for (const p of parts) {

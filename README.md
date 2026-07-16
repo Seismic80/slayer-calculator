@@ -1,5 +1,7 @@
 # Slayer Task Planner
 
+**Use it here: https://seismic80.github.io/slayer-calculator/**
+
 OSRS calculator: pick your slayer master (Duradel, Nieve, Konar, Krystilia) and see the expected **Slayer XP, loot and points** for every task you can be assigned.
 
 - **Task planner** — every task with its assignment chance (rebalanced live as you block/lock tasks), average amount (extend flags), chosen kill, XP, GP and the % chance of at least one rare. Left-click a row to plan to skip it; flags per row: **E**xtended, **B**locked, **L**ocked (not unlocked / can't receive).
