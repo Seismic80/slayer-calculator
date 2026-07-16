@@ -42,7 +42,7 @@
   .card h2 { font-size: 19px; font-weight: normal; color: var(--accent); margin: 0 0 10px; border-bottom: 1px solid #55492f; padding-bottom: 4px; }
   label.field { display: block; margin-bottom: 12px; font-size: 15px; color: var(--accent); }
   label.field span.lbl { display: block; margin-bottom: 3px; }
-  input[type=number], select {
+  input[type=number], input[type=text], select {
     width: 100%; background: var(--sunken); color: var(--value);
     border: 1px solid var(--edge); box-shadow: inset 1px 1px 0 #120f0b, inset -1px -1px 0 #4a4238;
     border-radius: 2px; padding: 6px 9px; font: inherit; text-shadow: 1px 1px 0 #000;
@@ -114,6 +114,10 @@
   <div>
     <div class="card">
       <h2>Setup</h2>
+      <label class="field"><span class="lbl">RuneScape name (optional)</span>
+        <div style="display:flex;gap:6px;"><input type="text" id="rsn" placeholder="RSN"><button id="fetchStats">Fetch</button></div>
+        <div class="hint" id="rsnStatus">Stats auto-lock tasks you can't receive and gate ironman processing (via Wise Old Man).</div>
+      </label>
       <label class="field"><span class="lbl">Slayer master</span>
         <select id="master">
           <option value="duradel">Duradel</option>
@@ -227,6 +231,7 @@ let S = {
   master: 'duradel', pref: 'base', raresOff: false, bracelet: 'none', ironman: false,
   curTask: null, curAmount: null,
   rewards: {},          // account-wide slayer reward purchases, by name
+  rsn: '', stats: null, // hiscores levels via Wise Old Man
   process: {},          // ironman processing choice per item name
   perMaster: {}, excluded: [],
 };
@@ -304,6 +309,7 @@ function isLocked(t) {
   const r = REWARD_IDX[t.key];
   if (r && r.unlock && !rewardOn(r.unlock)) return true;
   if (r && r.inverse && rewardOn(r.inverse)) return true;
+  if (statLocked(t)) return true;
   return false;
 }
 function isExtended(t) {
@@ -318,6 +324,18 @@ function effWeight(t) {
   return t.weight;
 }
 function toggleIn(arr, v) { const i = arr.indexOf(v); if (i >= 0) arr.splice(i, 1); else arr.push(v); }
+function combatLevel(st) {
+  if (!st) return 126;
+  const base = 0.25 * ((st.defence || 1) + (st.hitpoints || 10) + Math.floor((st.prayer || 1) / 2));
+  const melee = 0.325 * ((st.attack || 1) + (st.strength || 1));
+  const range = 0.325 * Math.floor((st.ranged || 1) * 3 / 2);
+  const mage = 0.325 * Math.floor((st.magic || 1) * 3 / 2);
+  return Math.floor(base + Math.max(melee, range, mage));
+}
+function statLocked(t) {
+  if (!S.stats) return false;
+  return (t.slayerReq || 1) > (S.stats.slayer || 1) || (t.combatReq || 3) > combatLevel(S.stats);
+}
 function braceletMult() { return S.bracelet === 'slaughter' ? 4 / 3 : S.bracelet === 'expeditious' ? 0.8 : 1; }
 
 function unitsOf(t) {
@@ -340,9 +358,13 @@ function evPerKill(monName) {
       rareP.push(d.rate);
       if (S.raresOff) continue;
     }
-    gp += d.rate * d.qty * price(d.name);
+    gp += d.rate * d.qty * priceFor(d.name, d.cat);
   }
   return { gp, rareP, xp: mon.slayxp || mon.hp || 0 };
+}
+function priceFor(name, cat) {
+  if (S.ironman && cat === 'alchs') return (DATA.items[name] && DATA.items[name].ha) || 0;
+  return price(name);
 }
 function unitEV(u) {
   let gp = 0, xp = 0; const rareP = [];
@@ -417,41 +439,67 @@ function pool() { return taskList().filter(t => !isBlocked(t) && !isLocked(t)); 
    Per-item processing options: [label, {Skill: xp per item}].
    Standard wiki XP values; potion values = cleaning + brewing the potion. */
 const PROCESS = {
-  'Uncut sapphire':    [['Cut gem', { Crafting: 50 }], ['Games necklace', { Crafting: 105 }], ['Ring of recoil', { Crafting: 90 }]],
-  'Uncut emerald':     [['Cut gem', { Crafting: 67.5 }], ['Ring of dueling', { Crafting: 122.5 }]],
-  'Uncut ruby':        [['Cut gem', { Crafting: 85 }], ['Amulet of strength', { Crafting: 170 }]],
-  'Uncut diamond':     [['Cut gem', { Crafting: 107.5 }], ['Amulet of power', { Crafting: 207.5 }]],
-  'Uncut dragonstone': [['Cut gem', { Crafting: 137.5 }], ['Amulet of glory', { Crafting: 287.5 }]],
-  'Grimy guam leaf':   [['Clean', { Herblore: 2.5 }], ['Attack potion', { Herblore: 27.5 }]],
-  'Grimy marrentill':  [['Clean', { Herblore: 3.8 }], ['Antipoison', { Herblore: 41.3 }]],
-  'Grimy tarromin':    [['Clean', { Herblore: 5 }], ['Strength potion', { Herblore: 55 }]],
-  'Grimy harralander': [['Clean', { Herblore: 6.3 }], ['Restore potion', { Herblore: 68.8 }]],
-  'Grimy ranarr weed': [['Clean', { Herblore: 7.5 }], ['Prayer potion', { Herblore: 95 }], ['Defence potion', { Herblore: 82.5 }]],
-  'Grimy toadflax':    [['Clean', { Herblore: 8 }], ['Saradomin brew', { Herblore: 188 }], ['Agility potion', { Herblore: 88 }]],
-  'Grimy irit leaf':   [['Clean', { Herblore: 8.8 }], ['Super attack', { Herblore: 108.8 }], ['Superantipoison', { Herblore: 115.5 }]],
-  'Grimy avantoe':     [['Clean', { Herblore: 10 }], ['Super energy', { Herblore: 127.5 }], ['Hunter potion', { Herblore: 130 }]],
-  'Grimy kwuarm':      [['Clean', { Herblore: 11.3 }], ['Super strength', { Herblore: 136.3 }]],
-  'Grimy snapdragon':  [['Clean', { Herblore: 11.8 }], ['Super restore', { Herblore: 154.3 }], ['Sanfew serum', { Herblore: 171.8 }]],
-  'Grimy cadantine':   [['Clean', { Herblore: 12.5 }], ['Super defence', { Herblore: 162.5 }]],
-  'Grimy lantadyme':   [['Clean', { Herblore: 13.1 }], ['Antifire potion', { Herblore: 170.6 }], ['Magic potion', { Herblore: 170.6 }]],
-  'Grimy dwarf weed':  [['Clean', { Herblore: 13.8 }], ['Ranging potion', { Herblore: 176.3 }]],
-  'Grimy torstol':     [['Clean', { Herblore: 15 }], ['Super combat potion', { Herblore: 165 }], ['Zamorak brew', { Herblore: 190 }]],
+  'Uncut sapphire':    [['Cut gem', { Crafting: 50 }, ['crafting', 20]], ['Games necklace', { Crafting: 105 }, ['crafting', 22]], ['Ring of recoil', { Crafting: 90 }, ['crafting', 20]]],
+  'Uncut emerald':     [['Cut gem', { Crafting: 67.5 }, ['crafting', 27]], ['Ring of dueling', { Crafting: 122.5 }, ['crafting', 27]]],
+  'Uncut ruby':        [['Cut gem', { Crafting: 85 }, ['crafting', 34]], ['Amulet of strength', { Crafting: 170 }, ['crafting', 50]]],
+  'Uncut diamond':     [['Cut gem', { Crafting: 107.5 }, ['crafting', 43]], ['Amulet of power', { Crafting: 207.5 }, ['crafting', 70]]],
+  'Uncut dragonstone': [['Cut gem', { Crafting: 137.5 }, ['crafting', 55]], ['Amulet of glory', { Crafting: 287.5 }, ['crafting', 80]]],
+  'Grimy guam leaf':   herb(2.5, 3, [['Attack potion', 25, 3]]),
+  'Grimy marrentill':  herb(3.8, 5, [['Antipoison', 37.5, 5]]),
+  'Grimy tarromin':    herb(5, 11, [['Strength potion', 50, 12]]),
+  'Grimy harralander': herb(6.3, 20, [['Restore potion', 62.5, 22]]),
+  'Grimy ranarr weed': herb(7.5, 25, [['Defence potion', 75, 30], ['Prayer potion', 87.5, 38]]),
+  'Grimy toadflax':    herb(8, 30, [['Agility potion', 80, 34], ['Saradomin brew', 180, 81]]),
+  'Grimy irit leaf':   herb(8.8, 40, [['Super attack', 100, 45], ['Superantipoison', 106.3, 48]]),
+  'Grimy avantoe':     herb(10, 48, [['Super energy', 117.5, 52], ['Hunter potion', 120, 53]]),
+  'Grimy kwuarm':      herb(11.3, 54, [['Super strength', 125, 55]]),
+  'Grimy snapdragon':  herb(11.8, 59, [['Super restore', 142.5, 63], ['Sanfew serum', 160, 65]]),
+  'Grimy cadantine':   herb(12.5, 65, [['Super defence', 150, 66]]),
+  'Grimy lantadyme':   herb(13.1, 67, [['Antifire potion', 157.5, 69], ['Magic potion', 157.5, 76]]),
+  'Grimy dwarf weed':  herb(13.8, 70, [['Ranging potion', 162.5, 72]]),
+  'Grimy torstol':     herb(15, 75, [['Zamorak brew', 175, 78], ['Super combat potion', 150, 90]]),
   'Bones':             boneOpts(4.5), 'Big bones': boneOpts(15), 'Babydragon bones': boneOpts(30),
   'Dragon bones':      boneOpts(72), 'Wyvern bones': boneOpts(72), 'Lava dragon bones': boneOpts(85),
   'Dagannoth bones':   boneOpts(125), 'Drake bones': boneOpts(80), 'Hydra bones': boneOpts(110),
   'Wyrm bones':        boneOpts(50), 'Superior dragon bones': boneOpts(150),
-  'Green dragonhide':  [['Craft d\'hide body', { Crafting: 62 }]],
-  'Blue dragonhide':   [['Craft d\'hide body', { Crafting: 70 }]],
-  'Red dragonhide':    [['Craft d\'hide body', { Crafting: 78 }]],
-  'Black dragonhide':  [['Craft d\'hide body', { Crafting: 86 }]],
-  'Runite bar':        [['Smith', { Smithing: 75 }]],
-  'Adamantite bar':    [['Smith', { Smithing: 62.5 }]],
-  'Mithril bar':       [['Smith', { Smithing: 50 }]],
-  'Steel bar':         [['Smith', { Smithing: 37.5 }]],
-  'Ensouled abyssal head': [['Reanimate', { Prayer: 1300 }]],
-  'Ensouled dragon head':  [['Reanimate', { Prayer: 1560 }]],
-  'Ensouled demon head':   [['Reanimate', { Prayer: 1170 }]],
+  'Green dragonhide':  [['Craft d\'hide body', { Crafting: 62 }, ['crafting', 63]]],
+  'Blue dragonhide':   [['Craft d\'hide body', { Crafting: 70 }, ['crafting', 71]]],
+  'Red dragonhide':    [['Craft d\'hide body', { Crafting: 78 }, ['crafting', 77]]],
+  'Black dragonhide':  [['Craft d\'hide body', { Crafting: 86 }, ['crafting', 84]]],
+  'Runite bar':        [['Smith', { Smithing: 75 }, ['smithing', 85]]],
+  'Adamantite bar':    [['Smith', { Smithing: 62.5 }, ['smithing', 70]]],
+  'Mithril bar':       [['Smith', { Smithing: 50 }, ['smithing', 50]]],
+  'Steel bar':         [['Smith', { Smithing: 37.5 }, ['smithing', 30]]],
+  'Ensouled abyssal head': [['Reanimate', { Prayer: 1300 }, ['magic', 85]]],
+  'Ensouled dragon head':  [['Reanimate', { Prayer: 1560 }, ['magic', 93]]],
+  'Ensouled demon head':   [['Reanimate', { Prayer: 1170 }, ['magic', 79]]],
 };
+// herb entry: clean option + potions (Herblore xp includes the clean)
+function herb(cleanXp, cleanReq, potions) {
+  const opts = [['Clean', { Herblore: cleanXp }, ['herblore', cleanReq]]];
+  for (const [label, xp, req] of potions) opts.push([label, { Herblore: cleanXp + xp }, ['herblore', req]]);
+  return opts;
+}
+function canDo(req) {
+  if (!req || !S.stats) return true;
+  return (S.stats[req[0]] || 1) >= req[1];
+}
+// default: grimy herbs pick the highest-XP potion the player can make;
+// everything else picks the first available option.
+function defaultProcess(name, opts) {
+  if (S.process[name] != null && canDo(opts[Math.min(S.process[name], opts.length - 1)][2])) return Math.min(S.process[name], opts.length - 1);
+  if (/^Grimy /.test(name) && S.stats) {
+    let best = -1, bestXp = -1;
+    opts.forEach((o, i) => {
+      if (!canDo(o[2])) return;
+      const xp = Object.values(o[1]).reduce((a, b) => a + b, 0);
+      if (xp > bestXp) { bestXp = xp; best = i; }
+    });
+    if (best >= 0) return best;
+  }
+  const first = opts.findIndex(o => canDo(o[2]));
+  return first >= 0 ? first : -1;
+}
 function boneOpts(xp) {
   return [['Bury', { Prayer: xp }], ['Gilded altar', { Prayer: xp * 3.5 }], ['Chaos altar (avg)', { Prayer: xp * 7 }]];
 }
@@ -484,7 +532,7 @@ function renderRewards() {
     for (const r of list) {
       const extra = r.kind === 'inverse' ? ' (blocks task)' : r.kind === 'superior' ? ' (superiors)' : r.kind === 'ggdouble' ? ' (GG counts 2)' : r.kind === 'weight' ? ' (weight ' + r.weight + ')' : '';
       html += '<label title="' + esc(r.task || '') + extra + '"><input type="checkbox" data-reward="' + esc(r.name) + '"' +
-        (rewardOn(r.name) ? ' checked' : '') + '> ' + esc(r.name) + ' <span class="hint">(' + r.cost + ')</span></label>';
+        (rewardOn(r.name) ? ' checked' : '') + '> ' + esc(r.name) + (r.task ? ' (' + esc(r.task) + ')' : '') + ' <span class="hint">(' + r.cost + ')</span></label>';
     }
     html += '</div>';
   }
@@ -575,6 +623,7 @@ function renderDetail() {
   if (m.sup) supNote = ' &middot; superiors: ' + (m.sup.pHeart * 100).toFixed(2) + '% imbued heart, ' + (m.sup.pGem * 100).toFixed(2) + '% eternal gem';
   $('detailIntro').innerHTML = fmtNum(m.xp) + ' Slayer XP &middot; ' + (m.uniq * 100).toFixed(1) + '% chance of ≥1 rare' +
     braceletNote + supNote + (S.raresOff ? ' &middot; <b>rares excluded from GP</b>' : '') +
+    (S.ironman ? ' &middot; <b>alchables priced at high alch</b>' : '') +
     '.<br><b>Left-click a drop to toggle it as left on the ground</b> — excluded from every GP total (planner too).';
 
   // merge drops across the unit's monsters: name+cat -> expected per unit kill
@@ -583,6 +632,7 @@ function renderDetail() {
     const mon = DATA.monsters[monName];
     for (const d of mon.drops) {
       if (d.name === 'Brimstone key' && S.master !== 'konar') continue; // Konar-only tertiary
+      if (/clue scroll|reward casket/i.test(d.name)) continue; // per user: don't show clues
       const k = d.name + '|' + d.cat;
       const e = merged.get(k) || { name: d.name, cat: d.cat, perUnit: 0, rate: d.rate, single: m.unit.monsters.length === 1 };
       e.perUnit += d.rate * d.qty;
@@ -600,7 +650,7 @@ function renderDetail() {
   let grand = 0;
   const expected = {}; // item -> expected count (for ironman XP)
   for (const cat of CATS) {
-    const items = drops.filter(d => d.cat === cat).sort((a, b) => b.perUnit * price(b.name) - a.perUnit * price(a.name));
+    const items = drops.filter(d => d.cat === cat).sort((a, b) => b.perUnit * priceFor(b.name, cat) - a.perUnit * priceFor(a.name, cat));
     if (!items.length) continue;
     html += '<tr class="group-head"><td colspan="5">' + CAT_LABEL[cat] + '</td></tr>';
     let sub = 0;
@@ -609,11 +659,11 @@ function renderDetail() {
       const counted = cat !== 'tertiary' && !(S.raresOff && cat === 'rares') && !off;
       const n = d.perUnit * m.units;
       expected[d.name] = (expected[d.name] || 0) + n;
-      const gp = n * price(d.name);
+      const gp = n * priceFor(d.name, cat);
       if (counted) sub += gp;
       html += '<tr class="loot-row' + (off ? ' excluded' : '') + '" data-item="' + esc(d.name) + '">' +
         '<td>' + esc(d.name) + '</td><td class="num">' + (d.single ? fmtRate(d.rate) : '—') + '</td>' +
-        '<td class="num">' + gpSpan(price(d.name)) + '</td>' +
+        '<td class="num">' + gpSpan(priceFor(d.name, cat)) + '</td>' +
         '<td class="num">' + fmtNum(n, n < 10 ? 2 : 0) + '</td>' +
         '<td class="num">' + (counted ? gpSpan(gp) : '<span class="hint">(' + fmtGP(gp) + ')</span>') + '</td></tr>';
     }
@@ -654,7 +704,8 @@ function renderIronman(expected) {
   const skillTotals = {};
   for (const name of rows) {
     const opts = PROCESS[name];
-    const sel = Math.min(S.process[name] || 0, opts.length - 1);
+    const sel = defaultProcess(name, opts);
+    if (sel < 0) continue; // level too low to process at all
     const [label, xpMap] = opts[sel];
     let cell = '';
     for (const [skill, xp] of Object.entries(xpMap)) {
@@ -664,7 +715,7 @@ function renderIronman(expected) {
     }
     html += '<tr><td>' + esc(name) + '</td><td class="num">' + fmtNum(expected[name], expected[name] < 10 ? 2 : 0) + '</td>' +
       '<td style="text-align:left"><select class="killsel" data-process="' + esc(name) + '">' +
-      opts.map((o, i) => '<option value="' + i + '"' + (i === sel ? ' selected' : '') + '>' + esc(o[0]) + '</option>').join('') +
+      opts.map((o, i) => '<option value="' + i + '"' + (i === sel ? ' selected' : '') + (canDo(o[2]) ? '' : ' disabled') + '>' + esc(o[0]) + (canDo(o[2]) ? '' : ' (' + o[2][1] + ' ' + o[2][0] + ')') + '</option>').join('') +
       '</select></td><td class="num">' + cell + '</td></tr>';
   }
   html += '<tr class="grand"><td colspan="3">Total banked XP</td><td class="num">' +
@@ -717,6 +768,34 @@ async function refreshPrices() {
   render();
 }
 
+async function fetchStats() {
+  const rsn = $('rsn').value.trim();
+  const st = $('rsnStatus');
+  if (!rsn) { S.rsn = ''; S.stats = null; save(); st.textContent = 'Stats cleared — no level gating.'; render(); return; }
+  st.textContent = 'Looking up ' + rsn + '…';
+  try {
+    let res = await fetch('https://api.wiseoldman.net/v2/players/' + encodeURIComponent(rsn));
+    if (res.status === 404) res = await fetch('https://api.wiseoldman.net/v2/players/' + encodeURIComponent(rsn), { method: 'POST' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const j = await res.json();
+    const skills = j.latestSnapshot && j.latestSnapshot.data && j.latestSnapshot.data.skills;
+    if (!skills) throw new Error('no stats snapshot yet — try again in a minute');
+    const stats = {};
+    for (const [k, v] of Object.entries(skills)) stats[k] = v.level;
+    S.rsn = rsn; S.stats = stats;
+    save();
+    statsSummary();
+    render();
+  } catch (e) {
+    st.textContent = 'Lookup failed (' + e.message + ').';
+  }
+}
+function statsSummary() {
+  if (!S.stats) return;
+  $('rsnStatus').textContent = S.rsn + ': ' + (S.stats.slayer || 1) + ' Slayer, ' + (S.stats.herblore || 1) + ' Herblore, ' +
+    (S.stats.crafting || 1) + ' Crafting, combat ' + combatLevel(S.stats) + '. Clear the box and press Fetch to remove.';
+}
+
 /* ---------- wiring ---------- */
 function fillCurTask() {
   const sel = $('curTask');
@@ -747,6 +826,10 @@ function init() {
   $('curTask').addEventListener('change', () => { S.curTask = $('curTask').value; S.curAmount = null; fillCurTask(); save(); render(); });
   $('curAmount').addEventListener('input', () => { S.curAmount = Math.max(1, parseInt($('curAmount').value) || 1); save(); renderDetail(); });
   $('refreshPrices').addEventListener('click', refreshPrices);
+  $('rsn').value = S.rsn || '';
+  if (S.stats) statsSummary();
+  $('fetchStats').addEventListener('click', fetchStats);
+  $('rsn').addEventListener('keydown', e => { if (e.key === 'Enter') fetchStats(); });
 
   $('rewardsBox').addEventListener('change', e => {
     const cb = e.target.closest('input[data-reward]');

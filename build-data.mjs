@@ -77,12 +77,17 @@ function parseAssignTable(wt) {
     const nameM = cells[0].match(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/);
     if (!nameM) continue;
     const wM = row.match(/\{\{\+=\|weight\|(\d+)/);
+    const unlockText = stripWiki(clean(cells[3] || '')).slice(0, 120);
+    const sReq = unlockText.match(/(\d+)\s*Slayer/i);
+    const cReq = unlockText.match(/(\d+)\s*Combat/i);
     tasks.push({
       task: (nameM[2] || nameM[1]).trim(),
       amount: parseRange(clean(cells[iAmt])),
       extended: parseRange(clean(cells[iExt])),
       weight: wM ? +wM[1] : null,
-      unlockText: stripWiki(clean(cells[3] || '')).slice(0, 120),
+      unlockText,
+      slayerReq: sReq ? +sReq[1] : 1,
+      combatReq: cReq ? +cReq[1] : 3,
     });
   }
   return tasks.filter(t => t.weight != null);
@@ -409,7 +414,7 @@ async function main() {
       const cands = k === 'Boss'
         ? CANDIDATES[key === 'krystilia' ? 'Boss (Krystilia)' : key === 'konar' ? 'Boss (Konar)' : 'Boss (Duradel/Nieve)']
         : (CANDIDATES[k] || []);
-      return { task: t.task, key: k || t.task, amount: t.amount, extended: t.extended, weight: t.weight, unlock: t.unlockText, monsters: cands };
+      return { task: t.task, key: k || t.task, amount: t.amount, extended: t.extended, weight: t.weight, unlock: t.unlockText, slayerReq: t.slayerReq, combatReq: t.combatReq, monsters: cands };
     });
     console.log(key + ': ' + masters[key].length + ' tasks, total weight ' + masters[key].reduce((a, t) => a + t.weight, 0));
   }
