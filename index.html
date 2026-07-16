@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slayer Task Planner — XP, Loot & Points Calculator</title>
+<style>
+  /* OSRS interface theme (shared with the revenant calculator).
+     Font: RuneScape.woff2 as hosted by oldschool.runescape.wiki, embedded
+     as a data URI. */
+  @font-face {
+    font-family: 'RuneScape';
+    src: url(data:font/woff2;base64,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) format('woff2');
+    font-display: swap;
+  }
+  :root {
+    --bg: #1b1712; --panel: #3e3529; --panel2: #2e2921; --sunken: #241f19;
+    --edge: #14100c; --bevel-light: #5f5747; --bevel-dark: #262019;
+    --text: #d8ccb4; --muted: #a89d85; --accent: #ff981f; --value: #ffff00;
+    --good: #2fdc2f; --bad: #ff4141; --link: #90c8f0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: radial-gradient(ellipse at 50% -20%, #2a2419 0%, var(--bg) 60%);
+    color: var(--text);
+    font: 16px/1.5 'RuneScape', 'Palatino Linotype', 'Book Antiqua', serif;
+    text-shadow: 1px 1px 0 #000;
+    padding: 24px 16px 64px;
+  }
+  a { color: var(--link); }
+  h1 { font-size: 30px; font-weight: normal; margin: 0 0 4px; color: var(--accent); text-shadow: 2px 2px 0 #000; }
+  .sub { color: var(--muted); margin: 0 0 20px; font-size: 15px; }
+  .layout { display: grid; grid-template-columns: 320px 1fr; gap: 18px; max-width: 1500px; margin: 0 auto; }
+  @media (max-width: 1000px) { .layout { grid-template-columns: 1fr; } }
+  .card {
+    background: linear-gradient(#453c2f, #382f25);
+    border: 1px solid var(--edge);
+    box-shadow: inset 1px 1px 0 var(--bevel-light), inset -1px -1px 0 var(--bevel-dark), 2px 2px 4px rgba(0,0,0,.5);
+    border-radius: 3px; padding: 14px 16px; margin-bottom: 14px;
+  }
+  .card h2 { font-size: 19px; font-weight: normal; color: var(--accent); margin: 0 0 10px; border-bottom: 1px solid #55492f; padding-bottom: 4px; }
+  label.field { display: block; margin-bottom: 12px; font-size: 15px; color: var(--accent); }
+  label.field span.lbl { display: block; margin-bottom: 3px; }
+  input[type=number], select {
+    width: 100%; background: var(--sunken); color: var(--value);
+    border: 1px solid var(--edge); box-shadow: inset 1px 1px 0 #120f0b, inset -1px -1px 0 #4a4238;
+    border-radius: 2px; padding: 6px 9px; font: inherit; text-shadow: 1px 1px 0 #000;
+  }
+  select option { background: var(--sunken); color: var(--value); }
+  input:focus, select:focus { outline: 1px solid var(--accent); }
+  input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
+  .toggle-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 15px; }
+  .radio-group { display: grid; gap: 6px; margin-bottom: 4px; }
+  .radio-group label { display: flex; align-items: center; gap: 8px; font-size: 15px; cursor: pointer; }
+  .radio-group label:hover { color: var(--value); }
+  .hint { font-size: 14px; color: var(--muted); margin-top: 2px; }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  th, td { padding: 4px 8px; border-bottom: 1px solid #2c261e; text-align: right; }
+  th:first-child, td:first-child { text-align: left; }
+  thead th { color: var(--accent); font-weight: normal; border-bottom: 1px solid #55492f; }
+  thead th.sortable { cursor: pointer; }
+  thead th.sortable:hover { color: var(--value); }
+  tbody tr:nth-child(even) { background: rgba(0,0,0,.10); }
+  tr.group-head td { color: var(--accent); padding-top: 12px; border-bottom: 1px solid var(--accent); background: none; }
+  tr.subtotal td { color: #fff; background: var(--panel2); }
+  tr.grand td { font-size: 17px; color: var(--value); background: var(--panel2); border-top: 2px solid var(--accent); }
+  td.num { color: #fff; }
+  .gp-y { color: var(--value); } .gp-w { color: #ffffff; } .gp-g { color: #00ff80; }
+  button {
+    background: linear-gradient(#5a5142, #3b3429); color: var(--accent);
+    border: 1px solid var(--edge); box-shadow: inset 1px 1px 0 var(--bevel-light), inset -1px -1px 0 var(--bevel-dark);
+    border-radius: 2px; padding: 6px 14px; font: inherit; text-shadow: 1px 1px 0 #000; cursor: pointer;
+  }
+  button:hover { color: var(--value); }
+  button:active { box-shadow: inset 1px 1px 0 var(--bevel-dark), inset -1px -1px 0 var(--bevel-light); }
+  .foot { font-size: 14px; color: var(--muted); line-height: 1.7; }
+  .foot li { margin-bottom: 4px; }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin-top: 10px; }
+  .stat { background: var(--sunken); border: 1px solid var(--edge); box-shadow: inset 1px 1px 0 #120f0b, inset -1px -1px 0 #4a4238; border-radius: 2px; padding: 7px 11px; }
+  .stat .k { font-size: 14px; color: var(--accent); }
+  .stat .v { font-size: 19px; color: #fff; }
+  .stat .n { font-size: 13.5px; color: var(--muted); }
+  .price-bar { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--muted); flex-wrap: wrap; }
+  .selftest { font-size: 14px; color: var(--muted); }
+  .selftest .ok { color: var(--good); } .selftest .fail { color: var(--bad); }
+  /* task planner rows */
+  tr.task-row { cursor: pointer; }
+  tr.task-row:hover td { background: rgba(255,152,31,.10); }
+  tr.task-row.skipped td { color: var(--bad); text-decoration: line-through; opacity: .75; }
+  tr.task-row.blocked td, tr.task-row.locked td { color: var(--muted); opacity: .5; }
+  tr.task-row.current td { background: rgba(255,255,0,.07); }
+  td select.killsel { width: auto; max-width: 170px; padding: 2px 4px; font-size: 14px; }
+  .flag { display: inline-block; min-width: 21px; text-align: center; padding: 1px 3px; margin-left: 3px;
+    border: 1px solid var(--edge); border-radius: 2px; background: var(--panel2); color: var(--muted);
+    font-size: 13px; cursor: pointer; text-decoration: none !important; }
+  .flag.on { color: var(--value); background: #4a3f28; border-color: var(--accent); }
+  .flag:hover { color: var(--accent); }
+  tr.loot-row { cursor: pointer; }
+  tr.loot-row:hover td { background: rgba(255,152,31,.10); }
+  tr.loot-row.excluded td { color: var(--muted); text-decoration: line-through; opacity: .6; }
+  .verdict-line { font-size: 18px; margin: 4px 0; }
+  .verdict-line.good { color: var(--good); } .verdict-line.bad { color: var(--bad); }
+</style>
+</head>
+<body>
+<div style="max-width:1500px;margin:0 auto;">
+  <h1>Slayer Task Planner</h1>
+  <p class="sub">Pick your master, mark blocks / locks / skips, and see the expected Slayer XP, loot and points for every task you can be assigned — drop rates and weights from the <a href="https://oldschool.runescape.wiki" target="_blank" rel="noopener">OSRS Wiki</a>.</p>
+</div>
+
+<div class="layout">
+  <!-- inputs -->
+  <div>
+    <div class="card">
+      <h2>Setup</h2>
+      <label class="field"><span class="lbl">Slayer master</span>
+        <select id="master">
+          <option value="duradel">Duradel</option>
+          <option value="nieve">Nieve</option>
+          <option value="konar">Konar quo Maten</option>
+          <option value="krystilia">Krystilia</option>
+        </select>
+      </label>
+      <div class="card" style="padding:10px 12px;background:var(--panel2);">
+        <span class="lbl" style="color:var(--muted);font-size:14px;">Default kill preference</span>
+        <div class="radio-group">
+          <label><input type="radio" name="pref" value="base" checked> Base monster</label>
+          <label><input type="radio" name="pref" value="best"> Most profitable option</label>
+        </div>
+        <div class="hint">Each row's Kill dropdown overrides this.</div>
+      </div>
+      <div class="toggle-row" style="margin-top:10px;">
+        <input type="checkbox" id="raresOff">
+        <label for="raresOff">Toggle rares off — GP as if you never hit a rare drop</label>
+      </div>
+    </div>
+    <div class="card">
+      <h2>My current task</h2>
+      <label class="field"><span class="lbl">Task</span>
+        <select id="curTask"></select>
+      </label>
+      <label class="field"><span class="lbl">Amount assigned</span>
+        <input type="number" id="curAmount" min="1" step="1">
+      </label>
+      <div class="hint">The breakdown on the right shows this task; the amount defaults to the average roll (uses your extend flag).</div>
+    </div>
+    <div class="card">
+      <h2>Prices</h2>
+      <div class="price-bar">
+        <button id="refreshPrices">Refresh prices</button>
+        <span id="priceStatus">Using bundled snapshot.</span>
+      </div>
+    </div>
+    <div class="card selftest" id="selftest"></div>
+  </div>
+
+  <!-- results -->
+  <div>
+    <div class="card">
+      <h2>Slayer points</h2>
+      <div id="pointsBox"></div>
+    </div>
+
+    <div class="card">
+      <h2>All possible tasks</h2>
+      <p class="hint" style="margin-top:0;">
+        <b>Left-click a row</b> to plan to skip it (&minus;30 points). Flags:
+        <span class="flag">E</span> extended &middot; <span class="flag">B</span> blocked &middot; <span class="flag">L</span> not unlocked / can't receive.
+        Blocked and locked tasks leave the assignment pool; chances rebalance automatically.
+      </p>
+      <div style="overflow-x:auto;"><table id="taskTable"></table></div>
+    </div>
+
+    <div class="card">
+      <h2 id="detailTitle">Task breakdown</h2>
+      <p class="hint" id="detailIntro" style="margin-top:0;"></p>
+      <div style="overflow-x:auto;"><table id="detailTable"></table></div>
+    </div>
+
+    <div class="card foot">
+      <h2>Notes</h2>
+      <ul>
+        <li>Assignment weights, amounts and extensions from each master's wiki page; drop tables parsed from every monster's wiki page by <code>build-data.mjs</code> (source links in the repo). Data snapshot: <span id="builtDate"></span>.</li>
+        <li>Loot per kill values tradeables at max(GE mid-price, high alch). Clue scrolls, champion scrolls and keys are tertiary: shown in the breakdown but never counted in GP totals.</li>
+        <li>"Uniques" chance is 1 &minus; &Pi;(1&minus;p)<sup>N</sup> over the chosen monster's rare drops for your task amount.</li>
+        <li>Points: long-run average per completed task including the every-10th/50th/100th/250th/1000th milestone bonuses; skipping costs 30 and does not advance the streak. Turael resets are not modelled here.</li>
+        <li>Konar tasks pay <a href="https://oldschool.runescape.wiki/w/Brimstone_key" target="_blank" rel="noopener">brimstone keys</a> (rate per monster from its wiki page); Krystilia tasks pay <a href="https://oldschool.runescape.wiki/w/Larran%27s_key" target="_blank" rel="noopener">Larran's keys</a> (1/floor(99&minus;(cb&minus;81)&times;49/269) at cb 81+). Konar's per-location restrictions aren't modelled for loot.</li>
+        <li>Krystilia's revenant task uses on-task, unskulled revenant rates — see the <a href="https://seismic80.github.io/rev-calculator/" target="_blank" rel="noopener">revenant calculator</a> for the full on-task vs off-task analysis.</li>
+        <li>Boss tasks: pick which boss you'd kill in the Kill dropdown; amount is the wiki's 3&ndash;35 roll (Combat Achievements can raise it).</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const CATS = ['rares', 'alchs', 'herbs', 'runes', 'seeds', 'resources', 'supplies', 'other', 'tertiary'];
+const CAT_LABEL = { rares: 'Rares & uniques', alchs: 'Alchables (weapons & armour)', herbs: 'Herbs', runes: 'Runes & ammunition', seeds: 'Seeds', resources: 'Resources', supplies: 'Supplies', other: 'Other', tertiary: 'Tertiary (not counted in GP)' };
+
+/* ---------- state ---------- */
+let S = {
+  master: 'duradel', pref: 'base', raresOff: false,
+  curTask: null, curAmount: null,
+  perMaster: {}, excluded: [],
+};
+try { Object.assign(S, JSON.parse(localStorage.getItem('slayercalc-v1') || '{}')); } catch (e) {}
+function ms() { // per-master state
+  if (!S.perMaster[S.master]) S.perMaster[S.master] = { skipped: [], blocked: [], locked: [], extended: [], kills: {} };
+  return S.perMaster[S.master];
+}
+function save() { try { localStorage.setItem('slayercalc-v1', JSON.stringify(S)); } catch (e) {} }
+let livePrices = null;
+
+/* ---------- helpers ---------- */
+function price(name) {
+  const it = DATA.items[name];
+  if (!it) return 0;
+  let ge = it.snap;
+  if (livePrices && it.id != null && livePrices[it.id] != null) ge = livePrices[it.id];
+  return Math.max(ge, it.ha || 0);
+}
+function fmtGP(n) {
+  const sign = n < 0 ? '-' : '';
+  const a = Math.abs(n);
+  if (a >= 1e9) return sign + (a / 1e9).toFixed(2) + 'b';
+  if (a >= 1e6) return sign + (a / 1e6).toFixed(2) + 'm';
+  if (a >= 1e4) return sign + (a / 1e3).toFixed(1) + 'k';
+  return sign + Math.round(a).toLocaleString('en-US');
+}
+function gpSpan(n) {
+  const a = Math.abs(n);
+  const tier = a >= 1e7 ? 'gp-g' : a >= 1e5 ? 'gp-w' : 'gp-y';
+  return '<span class="' + tier + '">' + fmtGP(n) + '</span>';
+}
+function fmtNum(n, dp = 0) { return isFinite(n) ? n.toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp }) : '∞'; }
+function fmtRate(r) { return r > 0 ? '1/' + fmtNum(1 / r, 1 / r < 100 ? 1 : 0) : '—'; }
+function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+function larranDenom(cb) {
+  if (cb == null) return null;
+  if (cb < 81) return 100 + Math.floor(0.3 * Math.pow(80 - cb, 2));
+  if (cb < 351) return Math.floor(99 - (cb - 81) * 49 / 269);
+  return 50;
+}
+
+/* ---------- model ---------- */
+function taskList() { return DATA.masters[S.master]; }
+function tKey(t) { return t.task; }
+function isSkipped(t) { return ms().skipped.includes(tKey(t)); }
+function isBlocked(t) { return ms().blocked.includes(tKey(t)); }
+function isLocked(t) { return ms().locked.includes(tKey(t)); }
+function isExtended(t) { return t.extended && ms().extended.includes(tKey(t)); }
+function toggleIn(arr, v) { const i = arr.indexOf(v); if (i >= 0) arr.splice(i, 1); else arr.push(v); }
+
+function chosenMonster(t) {
+  const o = ms().kills[tKey(t)];
+  if (o && t.monsters.includes(o)) return o;
+  if (S.pref === 'best') {
+    let best = null, bestEv = -1;
+    for (const m of t.monsters) {
+      if (!DATA.monsters[m]) continue;
+      const ev = evPerKill(m).gp;
+      if (ev > bestEv) { bestEv = ev; best = m; }
+    }
+    if (best) return best;
+  }
+  return t.monsters.find(m => DATA.monsters[m]) || null;
+}
+function avgAmount(t) {
+  const r = isExtended(t) ? t.extended : (t.amount || t.extended);
+  return r ? (r[0] + r[1]) / 2 : 0;
+}
+const excludedSet = () => new Set(S.excluded);
+function evPerKill(monName) {
+  const mon = DATA.monsters[monName];
+  if (!mon) return { gp: 0, rareP: [], xp: 0 };
+  const ex = excludedSet();
+  let gp = 0;
+  const rareP = [];
+  for (const d of mon.drops) {
+    if (d.cat === 'tertiary' || ex.has(d.name)) continue;
+    if (d.cat === 'rares') {
+      rareP.push(d.rate);
+      if (S.raresOff) continue;
+    }
+    gp += d.rate * d.qty * price(d.name);
+  }
+  return { gp, rareP, xp: mon.slayxp || mon.hp || 0 };
+}
+function uniqueChance(monName, n) {
+  const mon = DATA.monsters[monName];
+  if (!mon) return 0;
+  let stay = 1;
+  for (const d of mon.drops) if (d.cat === 'rares') stay *= Math.pow(1 - d.rate, n);
+  return 1 - stay;
+}
+// long-run average points per completed task (milestones included)
+function avgPoints(masterKey) {
+  const p = DATA.points[masterKey];
+  if (!p || !p.base) return 0;
+  let total = 0;
+  for (let n = 1; n <= 1000; n++) {
+    let pts = p.base;
+    for (const [interval, v] of p.milestones) if (n % interval === 0) pts = Math.max(pts, v);
+    total += pts;
+  }
+  return total / 1000;
+}
+function pool() { return taskList().filter(t => !isBlocked(t) && !isLocked(t)); }
+
+/* ---------- rendering ---------- */
+let sortBy = 'gp';
+function render() {
+  renderPoints();
+  renderTasks();
+  renderDetail();
+  selfTest();
+  $('builtDate').textContent = DATA.builtAt;
+}
+
+function renderPoints() {
+  const P = pool();
+  const totW = P.reduce((a, t) => a + t.weight, 0);
+  const pSkip = totW ? P.filter(isSkipped).reduce((a, t) => a + t.weight, 0) / totW : 0;
+  const avg = avgPoints(S.master);
+  const skipCost = pSkip < 1 ? 30 * pSkip / (1 - pSkip) : Infinity;
+  const net = avg - skipCost;
+  const maxSkip = avg / (avg + 30); // break-even skip fraction
+  let html = '<div class="verdict-line ' + (net >= 0 ? 'good' : 'bad') + '">' +
+    (isFinite(net)
+      ? (net >= 0 ? 'Sustainable: ' : 'Point-negative: ') + '≈' + fmtNum(net, 1) + ' points per completed task after skips'
+      : 'You are skipping every receivable task — no points are ever earned.') + '</div>';
+  html += '<div class="stat-grid">' +
+    stat('Avg points per task', fmtNum(avg, 1), 'incl. 10th/50th/100th/250th/1000th milestones') +
+    stat('Chance a roll is skipped', (pSkip * 100).toFixed(1) + '%', 'weighted by task chances') +
+    stat('Skip cost per completed task', isFinite(skipCost) ? fmtNum(skipCost, 1) : '∞', '30 points per planned skip') +
+    stat('Break-even skip share', (maxSkip * 100).toFixed(0) + '%', 'skip more than this (by weight) and you bleed points') +
+    '</div>';
+  $('pointsBox').innerHTML = html;
+  function stat(k, v, n) { return '<div class="stat"><div class="k">' + k + '</div><div class="v">' + v + '</div><div class="n">' + n + '</div></div>'; }
+}
+
+function renderTasks() {
+  const P = pool();
+  const totW = P.reduce((a, t) => a + t.weight, 0);
+  const rows = taskList().map(t => {
+    const mon = chosenMonster(t);
+    const n = avgAmount(t);
+    const ev = mon ? evPerKill(mon) : { gp: 0, xp: 0 };
+    const receivable = !isBlocked(t) && !isLocked(t);
+    return {
+      t, mon, n,
+      chance: receivable && totW ? t.weight / totW : 0,
+      xp: mon ? n * ev.xp : 0,
+      gp: mon ? n * ev.gp : 0,
+      uniq: mon ? uniqueChance(mon, n) : 0,
+    };
+  });
+  rows.sort((a, b) => sortBy === 'name' ? a.t.task.localeCompare(b.t.task)
+    : sortBy === 'chance' ? b.chance - a.chance
+    : sortBy === 'xp' ? b.xp - a.xp : b.gp - a.gp);
+
+  let html = '<thead><tr>' +
+    '<th class="sortable" data-sort="name">Task</th>' +
+    '<th class="sortable" data-sort="chance">Chance</th>' +
+    '<th>Avg #</th><th>Kill</th>' +
+    '<th class="sortable" data-sort="xp">Slayer XP</th>' +
+    '<th class="sortable" data-sort="gp">GP / task</th>' +
+    '<th>Uniques</th><th>Flags</th></tr></thead><tbody>';
+  for (const r of rows) {
+    const t = r.t;
+    const cls = ['task-row'];
+    if (isSkipped(t)) cls.push('skipped');
+    if (isBlocked(t)) cls.push('blocked');
+    if (isLocked(t)) cls.push('locked');
+    if (S.curTask === tKey(t)) cls.push('current');
+    const killSel = t.monsters.length > 1
+      ? '<select class="killsel" data-task="' + esc(tKey(t)) + '">' + t.monsters.filter(m => DATA.monsters[m]).map(m =>
+          '<option value="' + esc(m) + '"' + (m === r.mon ? ' selected' : '') + '>' + esc(m) + '</option>').join('') + '</select>'
+      : esc(r.mon || '—');
+    html += '<tr class="' + cls.join(' ') + '" data-task="' + esc(tKey(t)) + '" title="Left-click: plan to skip">' +
+      '<td>' + esc(t.task) + '</td>' +
+      '<td class="num">' + (r.chance ? (r.chance * 100).toFixed(1) + '%' : '—') + '</td>' +
+      '<td class="num">' + fmtNum(r.n) + '</td>' +
+      '<td style="text-align:left">' + killSel + '</td>' +
+      '<td class="num">' + fmtNum(r.xp) + '</td>' +
+      '<td class="num">' + gpSpan(r.gp) + '</td>' +
+      '<td class="num">' + (r.uniq * 100).toFixed(1) + '%</td>' +
+      '<td>' +
+        (t.extended ? '<span class="flag' + (isExtended(t) ? ' on' : '') + '" data-flag="extended" data-task="' + esc(tKey(t)) + '" title="Extended">E</span>' : '') +
+        '<span class="flag' + (isBlocked(t) ? ' on' : '') + '" data-flag="blocked" data-task="' + esc(tKey(t)) + '" title="Blocked">B</span>' +
+        '<span class="flag' + (isLocked(t) ? ' on' : '') + '" data-flag="locked" data-task="' + esc(tKey(t)) + '" title="Not unlocked / can\'t receive">L</span>' +
+      '</td></tr>';
+  }
+  $('taskTable').innerHTML = html + '</tbody>';
+}
+
+function renderDetail() {
+  const t = taskList().find(x => tKey(x) === S.curTask) || taskList()[0];
+  if (!t) return;
+  const mon = chosenMonster(t);
+  const monData = mon && DATA.monsters[mon];
+  const n = S.curAmount || Math.round(avgAmount(t));
+  $('detailTitle').textContent = 'Task breakdown: ' + n + ' ' + t.task + (mon ? ' (killing ' + mon + ')' : '');
+  if (!monData) { $('detailIntro').textContent = 'No drop data for this task.'; $('detailTable').innerHTML = ''; return; }
+  const xp = n * (monData.slayxp || monData.hp || 0);
+  const uniq = uniqueChance(mon, n);
+  const ex = excludedSet();
+  $('detailIntro').innerHTML = fmtNum(xp) + ' Slayer XP &middot; ' + (uniq * 100).toFixed(1) + '% chance of at least one rare' +
+    (S.raresOff ? ' &middot; <b>rares excluded from GP</b>' : '') +
+    '.<br><b>Left-click a drop to toggle it as left on the ground</b> — excluded from every GP total (planner too).';
+
+  // Larran's key synthetic line for Krystilia
+  const drops = monData.drops.slice();
+  if (S.master === 'krystilia' && monData.combat != null) {
+    drops.push({ name: "Larran's key", qty: 1, rate: 1 / larranDenom(monData.combat), cat: 'tertiary', synthetic: true });
+  }
+  let html = '<thead><tr><th>Item</th><th>Rate/kill</th><th>Avg qty</th><th>Price</th><th>Expected #</th><th>GP</th></tr></thead><tbody>';
+  let grand = 0;
+  for (const cat of CATS) {
+    const items = drops.filter(d => d.cat === cat).sort((a, b) => b.rate * b.qty * price(b.name) - a.rate * a.qty * price(a.name));
+    if (!items.length) continue;
+    html += '<tr class="group-head"><td colspan="6">' + CAT_LABEL[cat] + '</td></tr>';
+    let sub = 0;
+    for (const d of items) {
+      const off = ex.has(d.name);
+      const counted = cat !== 'tertiary' && !(S.raresOff && cat === 'rares') && !off;
+      const gp = d.rate * d.qty * price(d.name) * n;
+      if (counted) sub += gp;
+      html += '<tr class="loot-row' + (off ? ' excluded' : '') + '" data-item="' + esc(d.name) + '">' +
+        '<td>' + esc(d.name) + '</td><td class="num">' + fmtRate(d.rate) + '</td>' +
+        '<td class="num">' + fmtNum(d.qty, d.qty % 1 ? 1 : 0) + '</td>' +
+        '<td class="num">' + gpSpan(price(d.name)) + '</td>' +
+        '<td class="num">' + fmtNum(d.rate * n, 2) + '</td>' +
+        '<td class="num">' + (counted ? gpSpan(gp) : '<span class="hint">(' + fmtGP(gp) + ')</span>') + '</td></tr>';
+    }
+    grand += sub;
+    html += '<tr class="subtotal"><td colspan="5">' + CAT_LABEL[cat] + ' subtotal</td><td class="num">' + gpSpan(sub) + '</td></tr>';
+  }
+  html += '<tr class="grand"><td colspan="5">Expected loot from this task' + (S.raresOff ? ' (no rares)' : '') + '</td><td class="num">' + gpSpan(grand) + '</td></tr>';
+  $('detailTable').innerHTML = html + '</tbody>';
+}
+
+/* ---------- self-checks ---------- */
+function selfTest() {
+  const t = [];
+  const sums = { duradel: 327, nieve: 294, konar: 250, krystilia: 196 };
+  for (const [k, v] of Object.entries(sums))
+    t.push([k + ' task weights sum to ' + v, DATA.masters[k].reduce((a, x) => a + x.weight, 0) === v]);
+  const whip = DATA.monsters['Abyssal demon'].drops.find(d => d.name === 'Abyssal whip');
+  t.push(['Abyssal whip 1/512', whip && Math.abs(1 / whip.rate - 512) < 1]);
+  // hand-computed: (900×15 + 80×75 + 8×225 + 8×375 + 3×525 + 750) / 1000 = 26.625
+  t.push(['Duradel avg points = 26.6/task', Math.abs(avgPoints('duradel') - 26.625) < 0.01]);
+  t.push(["Larran's key 1/89 at cb 135", larranDenom(135) === 89]);
+  const P = pool(), totW = P.reduce((a, x) => a + x.weight, 0);
+  t.push(['Pool chances sum to 100%', !P.length || Math.abs(P.reduce((a, x) => a + x.weight / totW, 0) - 1) < 1e-9]);
+  $('selftest').innerHTML = '<h2>Self-checks</h2>' + t.map(([n, ok]) =>
+    '<div class="' + (ok ? 'ok' : 'fail') + '">' + (ok ? '✓' : '✗ FAIL') + ' ' + n + '</div>').join('');
+}
+
+/* ---------- prices ---------- */
+async function refreshPrices() {
+  const status = $('priceStatus');
+  status.textContent = 'Fetching…';
+  try {
+    const res = await fetch('https://prices.runescape.wiki/api/v1/osrs/latest');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = (await res.json()).data;
+    const out = {};
+    for (const it of Object.values(DATA.items)) {
+      if (it.id == null) continue;
+      const p = data[it.id];
+      if (p && (p.high || p.low)) out[it.id] = Math.round(((p.high || p.low) + (p.low || p.high)) / 2);
+    }
+    livePrices = out;
+    status.textContent = 'Live GE prices loaded ' + new Date().toLocaleTimeString() + '.';
+  } catch (e) {
+    livePrices = null;
+    status.textContent = 'Price fetch failed (' + e.message + ') — using snapshot (' + DATA.builtAt + ').';
+  }
+  render();
+}
+
+/* ---------- wiring ---------- */
+function fillCurTask() {
+  const sel = $('curTask');
+  sel.innerHTML = taskList().map(t => '<option value="' + esc(tKey(t)) + '">' + esc(t.task) + '</option>').join('');
+  if (!taskList().some(t => tKey(t) === S.curTask)) S.curTask = tKey(taskList()[0]);
+  sel.value = S.curTask;
+  const t = taskList().find(x => tKey(x) === S.curTask);
+  $('curAmount').value = S.curAmount || Math.round(avgAmount(t));
+}
+function init() {
+  $('master').value = S.master;
+  document.querySelector('input[name=pref][value=' + S.pref + ']').checked = true;
+  $('raresOff').checked = S.raresOff;
+  fillCurTask();
+
+  $('master').addEventListener('change', () => { S.master = $('master').value; S.curAmount = null; fillCurTask(); save(); render(); });
+  document.querySelectorAll('input[name=pref]').forEach(r => r.addEventListener('change', () => {
+    S.pref = document.querySelector('input[name=pref]:checked').value; save(); render();
+  }));
+  $('raresOff').addEventListener('change', () => { S.raresOff = $('raresOff').checked; save(); render(); });
+  $('curTask').addEventListener('change', () => { S.curTask = $('curTask').value; S.curAmount = null; fillCurTask(); save(); render(); });
+  $('curAmount').addEventListener('input', () => { S.curAmount = Math.max(1, parseInt($('curAmount').value) || 1); save(); renderDetail(); });
+  $('refreshPrices').addEventListener('click', refreshPrices);
+
+  $('taskTable').addEventListener('click', e => {
+    const flag = e.target.closest('.flag');
+    if (flag) {
+      toggleIn(ms()[flag.dataset.flag], flag.dataset.task);
+      save(); render();
+      return;
+    }
+    if (e.target.closest('select')) return;
+    const tr = e.target.closest('tr.task-row');
+    if (!tr) return;
+    toggleIn(ms().skipped, tr.dataset.task);
+    save(); render();
+  });
+  $('taskTable').addEventListener('change', e => {
+    const sel = e.target.closest('select.killsel');
+    if (!sel) return;
+    ms().kills[sel.dataset.task] = sel.value;
+    save(); render();
+  });
+  $('taskTable').addEventListener('click', e => {
+    const th = e.target.closest('th.sortable');
+    if (th) { sortBy = th.dataset.sort; renderTasks(); }
+  });
+  $('detailTable').addEventListener('click', e => {
+    const tr = e.target.closest('tr.loot-row');
+    if (!tr) return;
+    toggleIn(S.excluded, tr.dataset.item);
+    save(); render();
+  });
+
+  render();
+  refreshPrices();
+}
+init();
+</script>
+</body>
+</html>
