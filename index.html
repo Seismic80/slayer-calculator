@@ -189,7 +189,7 @@
       <div id="pointsBox"></div>
     </div>
 
-    <div class="card">
+    <div class="card" id="taskCard">
       <h2>All possible tasks</h2>
       <p class="hint" style="margin-top:0;">
         <b>Left-click a row</b> to plan to skip it (&minus;30 points). Flags:
@@ -199,7 +199,7 @@
       <div style="overflow-x:auto;"><table id="taskTable"></table></div>
     </div>
 
-    <div class="card">
+    <div class="card" id="detailCard">
       <h2 id="detailTitle">Task breakdown</h2>
       <p class="hint" id="detailIntro" style="margin-top:0;"></p>
       <div style="overflow-x:auto;"><table id="detailTable"></table></div>
@@ -567,6 +567,12 @@ function defaultProcess(name, opts) {
 
 /* ---------- rendering ---------- */
 let sortBy = 'gp';
+// ironman mode: the drops + banked XP breakdown moves above the task list
+function applyLayout() {
+  const det = $('detailCard'), tasks = $('taskCard');
+  if (S.ironman) tasks.parentNode.insertBefore(det, tasks);
+  else det.parentNode.insertBefore(tasks, det);
+}
 function render() {
   REWARD_IDX = taskRewardIndex();
   renderRewards();
@@ -920,7 +926,7 @@ function init() {
   $('raresOff').addEventListener('change', () => { S.raresOff = $('raresOff').checked; save(); render(); });
   $('revSkulled').checked = !!S.revSkulled;
   $('revSkulled').addEventListener('change', () => { S.revSkulled = $('revSkulled').checked; save(); render(); });
-  $('ironman').addEventListener('change', () => { S.ironman = $('ironman').checked; save(); render(); });
+  $('ironman').addEventListener('change', () => { S.ironman = $('ironman').checked; applyLayout(); save(); render(); });
   $('curTask').addEventListener('change', () => { S.curTask = $('curTask').value; S.curAmount = null; fillCurTask(); save(); render(); });
   $('curAmount').addEventListener('input', () => { S.curAmount = Math.max(1, parseInt($('curAmount').value) || 1); save(); renderDetail(); });
   $('refreshPrices').addEventListener('click', refreshPrices);
@@ -977,6 +983,7 @@ function init() {
   $('rewardNames').checked = !!S.rewardNames;
   $('rewardNames').addEventListener('change', () => { S.rewardNames = $('rewardNames').checked; save(); render(); });
 
+  applyLayout();
   render();
   refreshPrices();
 }
