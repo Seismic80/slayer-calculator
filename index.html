@@ -181,13 +181,15 @@
 
     <div class="card">
       <h2>My current task</h2>
-      <label class="field"><span class="lbl">Task</span>
-        <select id="curTask"></select>
-      </label>
-      <label class="field"><span class="lbl">Amount assigned</span>
-        <input type="number" id="curAmount" min="1" step="1">
-      </label>
-      <div class="hint">The breakdown on the right shows this task; the amount defaults to the average roll (uses your extend flag).</div>
+      <div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;">
+        <label class="field" style="flex:1 1 280px;margin-bottom:0;"><span class="lbl">Task</span>
+          <select id="curTask"></select>
+        </label>
+        <label class="field" style="flex:0 0 160px;margin-bottom:0;"><span class="lbl">Amount assigned</span>
+          <input type="number" id="curAmount" min="1" step="1">
+        </label>
+        <div class="hint" style="flex:1 1 260px;margin:0 0 6px;">Drives the Banked XP and Task breakdown cards below; the amount pre-fills with your average roll.</div>
+      </div>
     </div>
     <div class="card" id="ironCard" style="display:none;">
       <h2>Banked XP (ironman)</h2>
