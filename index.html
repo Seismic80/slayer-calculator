@@ -149,6 +149,10 @@
           <label><input type="radio" name="bracelet" value="slaughter"> Bracelet of slaughter (&asymp;33% more kills/task)</label>
           <label><input type="radio" name="bracelet" value="expeditious"> Expeditious bracelet (&asymp;20% fewer kills/task)</label>
         </div>
+        <div class="toggle-row" style="margin:8px 0 0;">
+          <input type="checkbox" id="revSkulled">
+          <label for="revSkulled">Skulled (revenant tasks: better uniques, no med helm)</label>
+        </div>
       </div>
     </div>
     <div class="card">
@@ -348,8 +352,12 @@ function unitsOf(t) {
 }
 function unitCount(u) { return u.ggdouble && rewardOn('Double Trouble') ? 2 : u.count; }
 const excludedSet = () => new Set(S.excluded);
+function resolveMon(title) {
+  if (S.revSkulled && DATA.monsters[title + ' (skulled)']) return title + ' (skulled)';
+  return title;
+}
 function evPerKill(monName) {
-  const mon = DATA.monsters[monName];
+  const mon = DATA.monsters[resolveMon(monName)];
   if (!mon) return { gp: 0, rareP: [], xp: 0 };
   const ex = excludedSet();
   let gp = 0;
@@ -508,7 +516,8 @@ function getProcess(name) {
   }
   if (ASHES[name] != null) {
     const xp = ASHES[name];
-    const opts = [['Scatter', { Prayer: xp }, null, String(xp)]];
+    const opts = [['Scatter', { Prayer: xp }, null, String(xp)],
+      ['Demonic offering', { Prayer: xp * 3 }, ['magic', 84], xp + ' ×3']];
     if (S.ashSanctifier) {
       const mult = S.kourendDiary ? 1 : 0.5;
       opts.push(['Ash sanctifier (' + (mult * 100) + '%)', { Prayer: xp * mult }, null, xp + ' ×' + mult, 'auto']);
@@ -571,7 +580,7 @@ function renderRewards() {
     html += '<div class="lbl" style="color:var(--muted);font-size:14px;margin:6px 0 4px;">' + label + '</div><div class="radio-group" style="grid-template-columns:1fr 1fr;">';
     for (const r of list) {
       const plain = r.kind === 'superior' ? 'Superior monsters' : r.kind === 'ggdouble' ? 'Grotesque Guardians ×2'
-        : r.kind === 'weight' ? esc(r.task) + ' weight ↑' : r.kind === 'inverse' ? 'Block ' + esc(r.task)
+        : r.kind === 'weight' ? 'More ' + esc(r.task) + ' tasks (weight ' + r.weight + ')' : r.kind === 'inverse' ? 'Block ' + esc(r.task)
         : esc(r.task) + ((r.also || []).length ? ' +' + r.also.length : '');
       const label = S.rewardNames ? esc(r.name) + (r.task ? ' (' + esc(r.task) + ')' : '') : plain;
       html += '<label title="' + esc(r.name) + ' — ' + esc(r.task || '') + '"><input type="checkbox" data-reward="' + esc(r.name) + '"' +
@@ -672,7 +681,7 @@ function renderDetail() {
   // merge drops across the unit's monsters: name+cat -> expected per unit kill
   const merged = new Map();
   for (const monName of m.unit.monsters) {
-    const mon = DATA.monsters[monName];
+    const mon = DATA.monsters[resolveMon(monName)];
     for (const d of mon.drops) {
       if (d.name === 'Brimstone key' && S.master !== 'konar') continue; // Konar-only tertiary
       if (/clue scroll|reward casket/i.test(d.name)) continue; // per user: don't show clues
@@ -683,7 +692,7 @@ function renderDetail() {
     }
   }
   if (S.master === 'krystilia') {
-    const cb = DATA.monsters[m.unit.monsters[0]].combat;
+    const cb = DATA.monsters[resolveMon(m.unit.monsters[0])].combat;
     if (cb != null) merged.set("Larran's key", { name: "Larran's key", cat: 'tertiary', perUnit: m.unit.monsters.length / larranDenom(cb), rate: 1 / larranDenom(cb), single: true });
   }
   const drops = [...merged.values()];
@@ -897,6 +906,8 @@ function init() {
     S.bracelet = document.querySelector('input[name=bracelet]:checked').value; save(); render();
   }));
   $('raresOff').addEventListener('change', () => { S.raresOff = $('raresOff').checked; save(); render(); });
+  $('revSkulled').checked = !!S.revSkulled;
+  $('revSkulled').addEventListener('change', () => { S.revSkulled = $('revSkulled').checked; save(); render(); });
   $('ironman').addEventListener('change', () => { S.ironman = $('ironman').checked; save(); render(); });
   $('curTask').addEventListener('change', () => { S.curTask = $('curTask').value; S.curAmount = null; fillCurTask(); save(); render(); });
   $('curAmount').addEventListener('input', () => { S.curAmount = Math.max(1, parseInt($('curAmount').value) || 1); save(); renderDetail(); });

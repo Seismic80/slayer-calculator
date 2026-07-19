@@ -195,7 +195,9 @@ const CANDIDATES = {
   'Mammoths': ['Mammoth'],
   'Moss giants': ['Moss giant'],
   'Pirates': ['Pirate', 'Zombie pirate'],
-  'Revenants': ['Revenant dragon', 'Revenant ork'],   // special-cased drop table below
+  'Revenants': ['Revenant dragon', 'Revenant knight', 'Revenant dark beast', 'Revenant ork',
+    'Revenant demon', 'Revenant hellhound', 'Revenant cyclops', 'Revenant hobgoblin',
+    'Revenant pyrefiend', 'Revenant goblin', 'Revenant imp'],   // special-cased drop tables below
   'Rogues': ['Rogue'],
   'Scorpions': ['Scorpion', 'Scorpia'],
   'Skeletons': ['Skeleton', "Vet'ion", "Calvar'ion"],
@@ -406,6 +408,22 @@ async function main() {
     konar: 'Konar quo Maten',
     krystilia: 'Krystilia',
   };
+  // Krystilia tasks must be completed inside the Wilderness, so her kill
+  // options exclude mainland-only variants (Cerberus, Skotizo, Abyssal Sire,
+  // K'ril room, demonic gorillas, mutated/catacombs variants, GWD proper).
+  // KBD counts for her black dragon tasks despite his lair technically
+  // sitting outside the Wilderness.
+  const KRYSTILIA_ONLY = {
+    'Abyssal demons': ['Abyssal demon'],
+    'Black demons': ['Black demon'],
+    'Greater demons': ['Greater demon'],
+    'Hellhounds': ['Hellhound'],
+    'Bloodveld': ['Bloodveld'],
+    'Nechryael': ['Greater Nechryael'],
+    'Jellies': ['Jelly'],
+    'Aviansie': ['Aviansie'],
+    'Black dragons': ['Black dragon', 'King Black Dragon'],
+  };
   const masters = {};
   for (const [key, page] of Object.entries(masterPages)) {
     const wt = await pageWikitext(page);
@@ -415,7 +433,7 @@ async function main() {
       if (!k) OUT_WARNINGS.push(key + ': no candidate mapping for task "' + t.task + '"');
       const cands = k === 'Boss'
         ? CANDIDATES[key === 'krystilia' ? 'Boss (Krystilia)' : key === 'konar' ? 'Boss (Konar)' : 'Boss (Duradel/Nieve)']
-        : (CANDIDATES[k] || []);
+        : ((key === 'krystilia' && KRYSTILIA_ONLY[k]) || CANDIDATES[k] || []);
       return { task: t.task, key: k || t.task, amount: t.amount, extended: t.extended, weight: t.weight, unlock: t.unlockText, slayerReq: t.slayerReq, combatReq: t.combatReq, monsters: cands };
     });
     console.log(key + ': ' + masters[key].length + ' tasks, total weight ' + masters[key].reduce((a, t) => a + t.weight, 0));
@@ -442,7 +460,7 @@ async function main() {
   const monsterSet = new Set();
   for (const list of Object.values(masters)) for (const t of list) for (const m of t.monsters)
     for (const title of (typeof m === 'string' ? [m] : m.monsters)) monsterSet.add(title);
-  monsterSet.delete('Revenant dragon'); monsterSet.delete('Revenant ork'); // special-cased
+  for (const t of [...monsterSet]) if (t.startsWith('Revenant ')) monsterSet.delete(t); // special-cased
   const titles = [...monsterSet];
   console.log('fetching ' + titles.length + ' monster pages...');
   const pages = await batchWikitext(titles);
@@ -519,31 +537,47 @@ async function main() {
     }
   }
 
-  // 6. revenants special case: on-task per-kill EV table from the shared template
-  //    formulas (see Template:Revenants/Drops; ported from the rev calculator).
-  const revs = {};
-  for (const [name, combat, hp] of [['Revenant dragon', 135, 155], ['Revenant ork', 105, 105]]) {
+  // 6. revenants special case: on-task per-kill EV tables from the shared
+  //    template formulas (see Template:Revenants/Drops; ported from the rev
+  //    calculator). Both unskulled and skulled variants are generated —
+  //    skulled: unique table ×(5.333/2.933) better, artefact table /22
+  //    weights with no dragon med helm and ancient emblem at 1/22.
+  const REV_SPECIES = [
+    ['Revenant dragon', 135, 155, 186], ['Revenant knight', 126, 143, 168],
+    ['Revenant dark beast', 120, 140, 157], ['Revenant ork', 105, 105, 115],
+    ['Revenant demon', 98, 80, 86], ['Revenant hellhound', 90, 80, 86],
+    ['Revenant cyclops', 82, 110, 119], ['Revenant hobgoblin', 60, 72, 73],
+    ['Revenant pyrefiend', 52, 48, 48], ['Revenant goblin', 15, 14, 14],
+    ['Revenant imp', 7, 10, 10],
+  ];
+  const revVariants = [];
+  for (const [base, combat, hp, slayxp] of REV_SPECIES)
+    revVariants.push([base, combat, hp, slayxp, false], [base + ' (skulled)', combat, hp, slayxp, true]);
+  for (const [name, combat, hp, slayxp, skulled] of revVariants) {
     const A = Math.floor(2200 / Math.floor(Math.sqrt(combat)));
     const B = 15 + Math.floor(Math.pow(combat + 60, 2) / 200);
     const s = Math.floor(Math.sqrt(combat));
     const medioc = (Math.min(A, B) - 1) / A, coins = B < A ? (A - B) / A : 0;
-    const uniqueOn = 1 / (A * 5.333); // on task, unskulled
+    const uniqueOn = 1 / (A * (skulled ? 2.933 : 5.333)); // on task
+    const af = skulled
+      ? { emblem: 1 / 22, totem: 4 / 22, statuette: 2 / 22, crystal: 3 / 22, medallion: 1 / 22, effigy: 1 / 22, relic: 1 / 22, seed: 4 / 22, helm: 0 }
+      : { emblem: 6 / 40, totem: 4 / 40, statuette: 2 / 40, crystal: 3 / 40, medallion: 1 / 40, effigy: 1 / 40, relic: 1 / 40, seed: 4 / 40, helm: 13 / 40 };
     const drops = [
       { name: 'Revenant ether', qty: (s + 2) / 2, rate: 1, cat: 'other', gemw: true },
       { name: "Craw's bow (u)", qty: 1, rate: uniqueOn / 5, cat: 'rares', gemw: true },
       { name: "Thammaron's sceptre (u)", qty: 1, rate: uniqueOn / 5, cat: 'rares', gemw: true },
       { name: "Viggora's chainmace (u)", qty: 1, rate: uniqueOn / 5, cat: 'rares', gemw: true },
       { name: 'Amulet of avarice', qty: 1, rate: uniqueOn * 2 / 5, cat: 'rares', gemw: true },
-      { name: 'Ancient relic', qty: 1, rate: 1 / (A * 40), cat: 'rares', gemw: true },
-      { name: 'Ancient effigy', qty: 1, rate: 1 / (A * 40), cat: 'rares', gemw: true },
-      { name: 'Ancient medallion', qty: 1, rate: 1 / (A * 40), cat: 'rares', gemw: true },
-      { name: 'Ancient statuette', qty: 1, rate: 2 / (A * 40), cat: 'rares', gemw: true },
-      { name: 'Ancient crystal', qty: 1, rate: 3 / (A * 40), cat: 'rares', gemw: true },
-      { name: 'Ancient totem', qty: 1, rate: 4 / (A * 40), cat: 'rares', gemw: true },
-      { name: 'Ancient emblem', qty: 1, rate: 6 / (A * 40), cat: 'rares', gemw: true },
-      { name: 'Magic seed', qty: 4, rate: 4 / (A * 40), cat: 'seeds', gemw: true },
-      { name: 'Yew seed', qty: 4, rate: 4 / (A * 40), cat: 'seeds', gemw: true },
-      { name: 'Dragon med helm', qty: 1, rate: 13 / (A * 40), cat: 'alchs', gemw: true },
+      { name: 'Ancient relic', qty: 1, rate: af.relic / A, cat: 'rares', gemw: true },
+      { name: 'Ancient effigy', qty: 1, rate: af.effigy / A, cat: 'rares', gemw: true },
+      { name: 'Ancient medallion', qty: 1, rate: af.medallion / A, cat: 'rares', gemw: true },
+      { name: 'Ancient statuette', qty: 1, rate: af.statuette / A, cat: 'rares', gemw: true },
+      { name: 'Ancient crystal', qty: 1, rate: af.crystal / A, cat: 'rares', gemw: true },
+      { name: 'Ancient totem', qty: 1, rate: af.totem / A, cat: 'rares', gemw: true },
+      { name: 'Ancient emblem', qty: 1, rate: af.emblem / A, cat: 'rares', gemw: true },
+      { name: 'Magic seed', qty: 4, rate: af.seed / A, cat: 'seeds', gemw: true },
+      { name: 'Yew seed', qty: 4, rate: af.seed / A, cat: 'seeds', gemw: true },
+      { name: 'Dragon med helm', qty: 1, rate: af.helm / A, cat: 'alchs', gemw: true },
       { name: 'Battlestaff', qty: 4, rate: medioc * 10 / 198, cat: 'alchs', gemw: true },
       { name: 'Bracelet of ethereum (uncharged)', qty: 1, rate: medioc * 30 / 198, cat: 'alchs', gemw: true },
       { name: 'Rune full helm', qty: 2, rate: medioc * 4 / 198, cat: 'alchs', gemw: true },
@@ -568,9 +602,8 @@ async function main() {
       { name: 'Revenant cave teleport', qty: 3, rate: medioc * 10 / 198, cat: 'other', gemw: true },
     ];
     if (coins > 0) drops.push({ name: 'Coins', qty: (1 + 25 * s) / 2, rate: coins, cat: 'other', gemw: false });
-    const slayxp = { 'Revenant dragon': 186, 'Revenant ork': 115 }[name];
-    revs[name] = { title: name + ' (on task)', hp, slayxp, combat, drops };
-    monsters[name] = revs[name];
+    // drop zero-rate lines (e.g. med helm when skulled)
+    monsters[name] = { title: name + ' (on task)', hp, slayxp, combat, drops: drops.filter(d => d.rate > 0) };
   }
   // add price entries for rev items not already present
   const revItems = { 'Revenant ether': 21820, "Craw's bow (u)": 22547, "Thammaron's sceptre (u)": 22552, "Viggora's chainmace (u)": 22542, 'Amulet of avarice': 22557, 'Ancient relic': 22305, 'Ancient effigy': 22302, 'Ancient medallion': 22299, 'Ancient statuette': 21813, 'Ancient crystal': 21804, 'Ancient totem': 21810, 'Ancient emblem': 21807, 'Bracelet of ethereum (uncharged)': 21817, 'Revenant cave teleport': 21802, 'Blighted manta ray': 24589, 'Blighted super restore(4)': 24598 };
