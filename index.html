@@ -838,14 +838,27 @@ async function refreshPrices() {
   const status = $('priceStatus');
   status.textContent = 'Fetching…';
   try {
-    const res = await fetch('https://prices.runescape.wiki/api/v1/osrs/latest');
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = (await res.json()).data;
+    // /latest can carry absurd one-off listings on illiquid items, so wild
+    // spreads defer to the volume-based 24h averages (or the conservative low).
+    const [rl, rd] = await Promise.all([
+      fetch('https://prices.runescape.wiki/api/v1/osrs/latest'),
+      fetch('https://prices.runescape.wiki/api/v1/osrs/24h'),
+    ]);
+    if (!rl.ok) throw new Error('HTTP ' + rl.status);
+    const data = (await rl.json()).data;
+    const day = rd.ok ? (await rd.json()).data : {};
     const out = {};
     for (const it of Object.values(DATA.items)) {
       if (it.id == null) continue;
-      const p = data[it.id];
-      if (p && (p.high || p.low)) out[it.id] = Math.round(((p.high || p.low) + (p.low || p.high)) / 2);
+      const l = data[it.id], d = day[it.id];
+      let v = 0;
+      if (l && l.high && l.low && Math.max(l.high, l.low) / Math.min(l.high, l.low) <= 5) v = Math.round((l.high + l.low) / 2);
+      else if (d && (d.avgHighPrice || d.avgLowPrice)) {
+        const a = d.avgHighPrice || d.avgLowPrice, b = d.avgLowPrice || d.avgHighPrice;
+        v = Math.max(a, b) / Math.min(a, b) <= 5 ? Math.round((a + b) / 2) : Math.min(a, b);
+      } else if (l && l.high && l.low) v = Math.min(l.high, l.low);
+      else if (l) v = l.high || l.low || 0;
+      if (v > 0) out[it.id] = v;
     }
     livePrices = out;
     status.textContent = 'Live GE prices loaded ' + new Date().toLocaleTimeString() + '.';

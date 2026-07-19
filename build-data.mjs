@@ -518,6 +518,23 @@ async function main() {
   console.log('fetching prices...');
   const mapping = await fetchJson('https://prices.runescape.wiki/api/v1/osrs/mapping', 'price_mapping');
   const latest = (await fetchJson('https://prices.runescape.wiki/api/v1/osrs/latest', 'price_latest')).data;
+  const day = (await fetchJson('https://prices.runescape.wiki/api/v1/osrs/24h', 'price_24h')).data;
+  // Illiquid items can carry absurd one-off listings on /latest (a dead item
+  // with a single 23m instant-buy shows an 11m "mid"). If the spread is wild,
+  // fall back to the volume-based 24h averages, else the conservative low.
+  function midPrice(id) {
+    const l = latest[id], d = day[id];
+    // the junk side can be either one (a 23m instant-sell on a 228gp item),
+    // so ratio-check with max/min and fall back to the smaller value
+    if (l && l.high && l.low && Math.max(l.high, l.low) / Math.min(l.high, l.low) <= 5)
+      return Math.round((l.high + l.low) / 2);
+    if (d && (d.avgHighPrice || d.avgLowPrice)) {
+      const a = d.avgHighPrice || d.avgLowPrice, b = d.avgLowPrice || d.avgHighPrice;
+      return Math.max(a, b) / Math.min(a, b) <= 5 ? Math.round((a + b) / 2) : Math.min(a, b);
+    }
+    if (l && l.high && l.low) return Math.min(l.high, l.low);
+    return l ? (l.high || l.low || 0) : 0;
+  }
   const byName = {};
   for (const m of mapping) byName[m.name.toLowerCase()] = m;
   const itemNames = new Set();
@@ -527,7 +544,7 @@ async function main() {
     const m = byName[n.toLowerCase()];
     if (!m) { items[n] = { id: null, snap: n === 'Coins' ? 1 : 0, ha: 0, tradeable: false }; continue; }
     const p = latest[m.id];
-    const snap = p && (p.high || p.low) ? Math.round(((p.high || p.low) + (p.low || p.high)) / 2) : 0;
+    const snap = midPrice(m.id);
     items[n] = { id: m.id, snap, ha: m.highalch || 0, tradeable: true };
   }
   // pseudo-items: average roll values, wiki-derived constants
@@ -621,7 +638,7 @@ async function main() {
     if (items[n]) continue;
     const m = mapping.find(x => x.id === id);
     const p = latest[id];
-    items[n] = { id, snap: p && (p.high || p.low) ? Math.round(((p.high || p.low) + (p.low || p.high)) / 2) : 0, ha: (m && m.highalch) || 0, tradeable: true };
+    items[n] = { id, snap: midPrice(id), ha: (m && m.highalch) || 0, tradeable: true };
   }
   if (!items['Coins']) items['Coins'] = { id: null, snap: 1, ha: 1, tradeable: false };
 
@@ -706,13 +723,13 @@ async function main() {
     const m = byName[n.toLowerCase()];
     if (!m) { items[n] = { id: null, snap: 0, ha: 0, tradeable: false }; continue; }
     const pr = latest[m.id];
-    items[n] = { id: m.id, snap: pr && (pr.high || pr.low) ? Math.round(((pr.high || pr.low) + (pr.low || pr.high)) / 2) : 0, ha: m.highalch || 0, tradeable: true };
+    items[n] = { id: m.id, snap: midPrice(m.id), ha: m.highalch || 0, tradeable: true };
   }
 
   // 6d. derived values for untradeable uniques that combine into tradeables.
   // Only fills items whose GE price is 0.
   {
-    const gp = n => { const it = items[n]; if (it && it.snap) return it.snap; const m2 = byName[n.toLowerCase()]; if (!m2) return 0; const p2 = latest[m2.id]; return p2 && (p2.high || p2.low) ? Math.round(((p2.high || p2.low) + (p2.low || p2.high)) / 2) : 0; };
+    const gp = n => { const it = items[n]; if (it && it.snap) return it.snap; const m2 = byName[n.toLowerCase()]; if (!m2) return 0; return midPrice(m2.id); };
     const derive = (name, value, note) => {
       if (items[name] && !items[name].snap && value > 0) { items[name].snap = Math.round(value); items[name].derived = note; }
     };
