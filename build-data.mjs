@@ -78,7 +78,7 @@ function parseAssignTable(wt) {
     if (!nameM) continue;
     const wM = row.match(/\{\{\+=\|weight\|(\d+)/);
     const unlockText = stripWiki(clean(cells[3] || '')).slice(0, 120);
-    const sReq = unlockText.match(/(\d+)\s*Slayer/i);
+    const sReq = unlockText.match(/(\d+)\s*Slayer(?!\s*reward)/i);
     const cReq = unlockText.match(/(\d+)\s*Combat/i);
     tasks.push({
       task: (nameM[2] || nameM[1]).trim(),
@@ -170,7 +170,7 @@ const CANDIDATES = {
   'Smoke devils': ['Smoke devil', 'Thermonuclear smoke devil'],
   'Spiritual creatures': ['Spiritual mage', 'Spiritual ranger', 'Spiritual warrior'],
   'Suqahs': ['Suqah'],
-  'Trolls': ['Mountain troll'],
+  'Trolls': ['Mountain troll', 'Ice troll male'],
   'Turoths': ['Turoth'],
   'TzHaar': ['TzHaar-Ket'],
   'Vampyres': ['Feral Vampyre', 'Vyrewatch Sentinel'],
@@ -207,7 +207,7 @@ const CANDIDATES = {
   'Boss (Duradel/Nieve)': BOSS_MAINLAND,
   'Boss (Konar)': [...BOSS_MAINLAND, 'Alchemical Hydra'],
   'Boss (Krystilia)': ['Callisto', "Vet'ion", 'Venenatis', 'Scorpia', 'Chaos Elemental',
-    'Chaos Fanatic', 'Crazy archaeologist', 'King Black Dragon', 'Artio', "Calvar'ion", 'Spindel'],
+    'Chaos Fanatic', 'Crazy archaeologist', 'Artio', "Calvar'ion", 'Spindel'],
 };
 // normalise task names coming out of the four tables to CANDIDATES keys
 const TASK_ALIAS = {
@@ -411,8 +411,8 @@ async function main() {
   // Krystilia tasks must be completed inside the Wilderness, so her kill
   // options exclude mainland-only variants (Cerberus, Skotizo, Abyssal Sire,
   // K'ril room, demonic gorillas, mutated/catacombs variants, GWD proper).
-  // KBD counts for her black dragon tasks despite his lair technically
-  // sitting outside the Wilderness.
+  // KBD's lair is not part of the Wilderness, so he doesn't count for her
+  // tasks either.
   const KRYSTILIA_ONLY = {
     'Abyssal demons': ['Abyssal demon'],
     'Black demons': ['Black demon'],
@@ -422,7 +422,7 @@ async function main() {
     'Nechryael': ['Greater Nechryael'],
     'Jellies': ['Jelly'],
     'Aviansie': ['Aviansie'],
-    'Black dragons': ['Black dragon', 'King Black Dragon'],
+    'Black dragons': ['Black dragon'],
   };
   const masters = {};
   for (const [key, page] of Object.entries(masterPages)) {
@@ -697,6 +697,29 @@ async function main() {
     if (!m) { items[n] = { id: null, snap: 0, ha: 0, tradeable: false }; continue; }
     const pr = latest[m.id];
     items[n] = { id: m.id, snap: pr && (pr.high || pr.low) ? Math.round(((pr.high || pr.low) + (pr.low || pr.high)) / 2) : 0, ha: m.highalch || 0, tradeable: true };
+  }
+
+  // 6d. derived values for untradeable uniques that combine into tradeables.
+  // Only fills items whose GE price is 0.
+  {
+    const gp = n => { const it = items[n]; if (it && it.snap) return it.snap; const m2 = byName[n.toLowerCase()]; if (!m2) return 0; const p2 = latest[m2.id]; return p2 && (p2.high || p2.low) ? Math.round(((p2.high || p2.low) + (p2.low || p2.high)) / 2) : 0; };
+    const derive = (name, value, note) => {
+      if (items[name] && !items[name].snap && value > 0) { items[name].snap = Math.round(value); items[name].derived = note; }
+    };
+    // DT2 vestiges: ring minus the three chromium ingots it consumes
+    derive('Bellator vestige', gp('Bellator ring') - 3 * gp('Chromium ingot'), 'Bellator ring − 3 ingots');
+    derive('Ultor vestige', gp('Ultor ring') - 3 * gp('Chromium ingot'), 'Ultor ring − 3 ingots');
+    derive('Venator vestige', gp('Venator ring') - 3 * gp('Chromium ingot'), 'Venator ring − 3 ingots');
+    derive('Magus vestige', gp('Magus ring') - 3 * gp('Chromium ingot'), 'Magus ring − 3 ingots');
+    // Alchemical hydra ring pieces: a third of a brimstone ring each
+    for (const pc of ["Hydra's eye", "Hydra's fang", "Hydra's heart"]) derive(pc, gp('Brimstone ring') / 3, 'Brimstone ring ÷ 3');
+    // Araxxor: halberd pieces and the rancour fang
+    for (const pc of ['Noxious point', 'Noxious blade', 'Noxious pommel']) derive(pc, gp('Noxious halberd') / 3, 'Noxious halberd ÷ 3');
+    derive('Araxyte fang', gp('Amulet of rancour') - gp('Amulet of torture'), 'rancour − torture');
+    // Unsired: consequence table per https://oldschool.runescape.wiki/w/Unsired
+    // 62/128 bludgeon piece, 26/128 dagger, 13/128 jar, 12/128 whip, 10/128 head, 5/128 pet
+    derive('Unsired', (62 * gp('Abyssal bludgeon') / 3 + 26 * gp('Abyssal dagger') + 13 * gp('Jar of miasma') + 12 * gp('Abyssal whip')) / 128, 'avg Font of Consumption value');
+    console.log('derived prices:', ['Bellator vestige', 'Unsired', "Hydra's eye", 'Noxious point', 'Araxyte fang'].map(n => n + '=' + (items[n] ? items[n].snap : '?')).join(', '));
   }
 
   // 7. emit

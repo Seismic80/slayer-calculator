@@ -449,11 +449,11 @@ function pool() { return taskList().filter(t => !isBlocked(t) && !isLocked(t)); 
    Options: [label, {Skill: xp/item}, [statKey, level], "xp breakdown", flag]
    flag 'auto' marks the option auto-selected when its device toggle is on. */
 const PROCESS_STATIC = {
-  'Uncut sapphire':    gem(50, 20, [['ring of recoil', 40, 20], ['games necklace', 55, 22], ['bracelet of clay', 60, 23], ['amulet of magic', 65, 24]]),
-  'Uncut emerald':     gem(67.5, 27, [['ring of dueling', 55, 27], ['emerald necklace', 60, 29], ['castle wars bracelet', 65, 30], ['amulet of defence', 70, 31]]),
-  'Uncut ruby':        gem(85, 34, [['ring of forging', 75, 34], ['ruby necklace', 85, 40], ['inoculation bracelet', 80, 42], ['amulet of strength', 85, 50]]),
-  'Uncut diamond':     gem(107.5, 43, [['ring of life', 85, 43], ['phoenix necklace', 90, 56], ['abyssal bracelet', 95, 58], ['amulet of power', 100, 70]]),
-  'Uncut dragonstone': gem(137.5, 55, [['ring of wealth', 100, 55], ['skills necklace', 105, 72], ['combat bracelet', 110, 74], ['amulet of glory', 150, 80]]),
+  'Uncut sapphire':    gem(50, 20, [['sapphire ring', 40, 20], ['sapphire necklace', 55, 22], ['sapphire bracelet', 60, 23], ['sapphire amulet', 65, 24]]),
+  'Uncut emerald':     gem(67.5, 27, [['emerald ring', 55, 27], ['emerald necklace', 60, 29], ['emerald bracelet', 65, 30], ['emerald amulet', 70, 31]]),
+  'Uncut ruby':        gem(85, 34, [['ruby ring', 75, 34], ['ruby necklace', 85, 40], ['ruby bracelet', 80, 42], ['ruby amulet', 85, 50]]),
+  'Uncut diamond':     gem(107.5, 43, [['diamond ring', 85, 43], ['diamond necklace', 90, 56], ['diamond bracelet', 95, 58], ['diamond amulet', 100, 70]]),
+  'Uncut dragonstone': gem(137.5, 55, [['dragonstone ring', 100, 55], ['dragonstone necklace', 105, 72], ['dragonstone bracelet', 110, 74], ['dragonstone amulet', 150, 80]]),
   'Grimy guam leaf':   herb(2.5, 3, [['Attack potion', 25, 3]]),
   'Grimy marrentill':  herb(3.8, 5, [['Antipoison', 37.5, 5]]),
   'Grimy tarromin':    herb(5, 11, [['Strength potion', 50, 12]]),
@@ -468,12 +468,14 @@ const PROCESS_STATIC = {
   'Grimy lantadyme':   herb(13.1, 67, [['Antifire potion', 157.5, 69], ['Magic potion', 157.5, 76]]),
   'Grimy dwarf weed':  herb(13.8, 70, [['Ranging potion', 162.5, 72]]),
   'Grimy torstol':     herb(15, 75, [['Zamorak brew', 175, 78], ['Super combat potion', 150, 90]]),
-  'Logs':              [['Arrow shafts', { Fletching: 5 }, ['fletching', 1], '5']],
-  'Oak logs':          [['Oak longbow (u)', { Fletching: 25 }, ['fletching', 25], '25']],
-  'Willow logs':       [['Willow longbow (u)', { Fletching: 41.5 }, ['fletching', 40], '41.5']],
-  'Maple logs':        [['Maple longbow (u)', { Fletching: 58.3 }, ['fletching', 55], '58.3']],
-  'Yew logs':          [['Yew longbow (u)', { Fletching: 75 }, ['fletching', 70], '75']],
-  'Magic logs':        [['Magic longbow (u)', { Fletching: 91.5 }, ['fletching', 85], '91.5']],
+  'Logs':              logOpts(null, 10, 5, 5, 1, 40, 1, [['Arrow shafts', 5, 1]]),
+  'Oak logs':          logOpts('Oak', 25, 25, 16.5, 20, 60, 15),
+  'Willow logs':       logOpts('Willow', 41.5, 40, 33.3, 35, 90, 30),
+  'Maple logs':        logOpts('Maple', 58.3, 55, 50, 50, 135, 45),
+  'Yew logs':          logOpts('Yew', 75, 70, 67.5, 65, 202.5, 60),
+  'Magic logs':        logOpts('Magic', 91.5, 85, 83.3, 80, 303.8, 75),
+  'Teak logs':         [['Burn', { Firemaking: 105 }, ['firemaking', 35], '105']],
+  'Mahogany logs':     [['Burn', { Firemaking: 157.5 }, ['firemaking', 50], '157.5']],
   'Green dragonhide':  [["Craft d'hide body", { Crafting: 62 }, ['crafting', 63], '62']],
   'Blue dragonhide':   [["Craft d'hide body", { Crafting: 70 }, ['crafting', 71], '70']],
   'Red dragonhide':    [["Craft d'hide body", { Crafting: 78 }, ['crafting', 77], '78']],
@@ -489,6 +491,16 @@ const PROCESS_STATIC = {
 const BONES = { 'Bones': 4.5, 'Big bones': 15, 'Babydragon bones': 30, 'Dragon bones': 72, 'Wyvern bones': 72,
   'Lava dragon bones': 85, 'Dagannoth bones': 125, 'Drake bones': 80, 'Hydra bones': 110, 'Wyrm bones': 50, 'Superior dragon bones': 150 };
 const ASHES = { 'Fiendish ashes': 10, 'Vile ashes': 25, 'Malicious ashes': 65, 'Abyssal ashes': 85, 'Infernal ashes': 110 };
+function logOpts(prefix, longXp, longReq, shortXp, shortReq, burnXp, burnReq, extra) {
+  const nm = k => (prefix ? prefix + ' ' + k.toLowerCase() : k);
+  const opts = [
+    [nm('Longbow (u)'), { Fletching: longXp }, ['fletching', longReq], String(longXp)],
+    [nm('Shortbow (u)'), { Fletching: shortXp }, ['fletching', shortReq], String(shortXp)],
+  ];
+  for (const [l, xp, req] of (extra || [])) opts.push([l, { Fletching: xp }, ['fletching', req], String(xp)]);
+  opts.push(['Burn', { Firemaking: burnXp }, ['firemaking', burnReq], String(burnXp)]);
+  return opts;
+}
 function herb(cleanXp, cleanReq, potions) {
   const opts = [['Clean only', { Herblore: cleanXp }, ['herblore', cleanReq], String(cleanXp)]];
   for (const [label, xp, req] of potions) opts.push(['Clean + ' + label, { Herblore: cleanXp + xp }, ['herblore', req], cleanXp + ' + ' + xp]);
@@ -912,7 +924,7 @@ function init() {
   $('curTask').addEventListener('change', () => { S.curTask = $('curTask').value; S.curAmount = null; fillCurTask(); save(); render(); });
   $('curAmount').addEventListener('input', () => { S.curAmount = Math.max(1, parseInt($('curAmount').value) || 1); save(); renderDetail(); });
   $('refreshPrices').addEventListener('click', refreshPrices);
-  $('rsn').value = S.rsn || '';
+  // RSN box intentionally starts empty; saved stats still apply (status line below).
   if (S.stats) statsSummary();
   $('fetchStats').addEventListener('click', fetchStats);
   $('rsn').addEventListener('keydown', e => { if (e.key === 'Enter') fetchStats(); });
