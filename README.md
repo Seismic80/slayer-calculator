@@ -17,3 +17,7 @@ OSRS calculator: pick your slayer master (Duradel, Nieve, Konar, Krystilia) and 
 Known simplifications: boss kills count 1:1 toward the task amount, Konar's per-location restrictions aren't modelled for loot, superiors aren't included, and clue scrolls/keys (tertiary) are shown but never added to GP totals.
 
 No build step for the page itself — open `index.html` locally (it loads `data.js` from the same folder) or serve the folder statically.
+
+## Source visibility
+
+The source is public for transparency. **All rights reserved** — no permission is granted to reuse, modify, or redistribute this code. Drop rates and game data are derived from the [OSRS Wiki](https://oldschool.runescape.wiki) (CC BY-NC-SA). Old School RuneScape is a trademark of Jagex Ltd; this project is not affiliated with or endorsed by Jagex.
