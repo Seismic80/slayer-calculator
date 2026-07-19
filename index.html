@@ -189,6 +189,12 @@
       <div id="pointsBox"></div>
     </div>
 
+    <div class="card" id="ironCard" style="display:none;">
+      <h2>Banked XP (ironman)</h2>
+      <p class="hint" id="ironHint" style="margin-top:0;"></p>
+      <div id="ironBox" style="overflow-x:auto;"></div>
+    </div>
+
     <div class="card" id="taskCard">
       <h2>All possible tasks</h2>
       <p class="hint" style="margin-top:0;">
@@ -203,7 +209,6 @@
       <h2 id="detailTitle">Task breakdown</h2>
       <p class="hint" id="detailIntro" style="margin-top:0;"></p>
       <div style="overflow-x:auto;"><table id="detailTable"></table></div>
-      <div id="ironBox" style="margin-top:10px;overflow-x:auto;"></div>
     </div>
 
     <div class="card foot">
@@ -567,11 +572,9 @@ function defaultProcess(name, opts) {
 
 /* ---------- rendering ---------- */
 let sortBy = 'gp';
-// ironman mode: the drops + banked XP breakdown moves above the task list
+// ironman mode: the banked-XP card sits above the task list
 function applyLayout() {
-  const det = $('detailCard'), tasks = $('taskCard');
-  if (S.ironman) tasks.parentNode.insertBefore(det, tasks);
-  else det.parentNode.insertBefore(tasks, det);
+  $('ironCard').style.display = S.ironman ? '' : 'none';
 }
 function render() {
   REWARD_IDX = taskRewardIndex();
@@ -763,10 +766,11 @@ function renderDetail() {
   html += '<tr class="grand"><td colspan="4">Expected loot from this task' + (S.raresOff ? ' (no rares)' : '') + '</td><td class="num">' + gpSpan(grand) + '</td></tr>';
   $('detailTable').innerHTML = html + '</tbody>';
 
-  renderIronman(expected);
+  renderIronman(expected, amount + ' ' + t.task + (m.unit ? ' — killing ' + m.unit.label : ''));
 }
 
-function renderIronman(expected) {
+function renderIronman(expected, label) {
+  if ($('ironHint')) $('ironHint').textContent = label ? 'From your current task: ' + label : '';
   if (!S.ironman) { $('ironBox').innerHTML = ''; return; }
   let html = '<div class="toggle-row" style="flex-wrap:wrap;gap:14px;">' +
     devToggle('bonecrusher', 'Bonecrusher') +
