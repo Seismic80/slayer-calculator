@@ -61,8 +61,10 @@ function parseAssignTable(wt) {
   const headers = [...chunks[headChunkIdx].matchAll(/^!\s*(?:class="[^"]*"\s*\|)?\s*(.+)$/gm)]
     .map(m => m[1].replace(/\[\[[^\]|]*\|([^\]]*)\]\]/g, '$1').replace(/\[\[([^\]]*)\]\]/g, '$1').toLowerCase());
   const col = name => headers.findIndex(h => h.includes(name));
-  const iAmt = col('amount'), iExt = col('extended');
+  const iAmt = col('amount'), iExt = col('extended'), iUnlock = col('unlock');
   if (iAmt < 0) throw new Error('no Amount column found; headers: ' + headers.join(' / '));
+  // Krystilia has no unlock column; her level requirements sit in footnote
+  // refs on the monster name, so fall back to scanning the whole row.
   const rows = chunks.slice(headChunkIdx + 1).filter(r => r.trim());
   const tasks = [];
   for (const row of rows) {
@@ -77,9 +79,17 @@ function parseAssignTable(wt) {
     const nameM = cells[0].match(/\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]+))?\]\]/);
     if (!nameM) continue;
     const wM = row.match(/\{\{\+=\|weight\|(\d+)/);
-    const unlockText = stripWiki(clean(cells[3] || '')).slice(0, 120);
-    const sReq = unlockText.match(/(\d+)\s*Slayer(?!\s*reward)/i);
-    const cReq = unlockText.match(/(\d+)\s*Combat/i);
+    const unlockText = stripWiki(clean(iUnlock >= 0 ? cells[iUnlock] || '' : '')).slice(0, 120);
+    // requirement source: the unlock column if present, else the raw row's
+    // footnote refs ({{SCP|Slayer|85}} etc.)
+    let sReq, cReq;
+    if (iUnlock >= 0) {
+      sReq = unlockText.match(/(\d+)\s*Slayer(?!\s*reward)/i);
+      cReq = unlockText.match(/(\d+)\s*Combat(?!\s*level)/i);
+    } else {
+      sReq = row.match(/\{\{SCP\|Slayer\|(\d+)/i);
+      cReq = row.match(/\{\{SCP\|Combat\|(\d+)/i);
+    }
     tasks.push({
       task: (nameM[2] || nameM[1]).trim(),
       amount: parseRange(clean(cells[iAmt])),
