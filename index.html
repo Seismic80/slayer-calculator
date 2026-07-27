@@ -211,6 +211,7 @@
     <div class="card" id="detailCard">
       <h2 id="detailTitle">Task breakdown</h2>
       <p class="hint" id="detailIntro" style="margin-top:0;"></p>
+      <div id="travelBox" style="margin:6px 0 10px;font-size:14px;color:var(--accent);"></div>
       <div style="overflow-x:auto;"><table id="detailTable"></table></div>
     </div>
 
@@ -247,11 +248,15 @@ let S = {
   rewards: {},          // account-wide slayer reward purchases, by name
   rsn: '', stats: null, // hiscores levels via Wise Old Man
   process: {},          // ironman processing choice per item name
+  travel: {},           // custom travel time per kill-option id: { method, sec }
   perMaster: {}, excluded: [],
 };
 try { Object.assign(S, JSON.parse(localStorage.getItem('slayercalc-v1') || '{}')); } catch (e) {}
 if (!S.rewards) S.rewards = {};
 if (!S.process) S.process = {};
+if (!S.travel) S.travel = {};
+function travelSec(unit) { const tv = unit && S.travel[unit.id]; return tv && tv.sec > 0 ? tv.sec : null; }
+function fmtTravel(sec) { return sec == null ? '—' : sec >= 60 ? Math.floor(sec / 60) + 'm ' + (sec % 60) + 's' : sec + 's'; }
 function ms() {
   if (!S.perMaster[S.master]) S.perMaster[S.master] = { skipped: [], blocked: [], locked: [], extended: [], kills: {} };
   const m = S.perMaster[S.master];
@@ -662,7 +667,7 @@ function renderTasks() {
   let html = '<thead><tr>' +
     '<th class="sortable" data-sort="name">Task</th>' +
     '<th class="sortable" data-sort="chance">Chance</th>' +
-    '<th>Avg #</th><th>Kill</th><th>Brace</th>' +
+    '<th>Avg #</th><th>Kill</th><th>Brace</th><th>Travel</th>' +
     '<th class="sortable" data-sort="xp">Slayer XP</th>' +
     '<th class="sortable" data-sort="gp">GP / task</th>' +
     '<th>Expected uniques</th><th>Flags</th></tr></thead><tbody>';
@@ -689,6 +694,7 @@ function renderTasks() {
       '<td class="num">' + fmtNum(r.n) + '</td>' +
       '<td style="text-align:left">' + killSel + '</td>' +
       '<td style="text-align:left">' + braceSel + '</td>' +
+      '<td class="num">' + fmtTravel(travelSec(r.m.unit)) + '</td>' +
       '<td class="num">' + fmtNum(r.m.xp) + '</td>' +
       '<td class="num">' + gpSpan(r.m.gp) + '</td>' +
       '<td class="num">' + fmtNum(r.m.uniq, 2) + '</td>' +
@@ -718,6 +724,13 @@ function renderDetail() {
     braceletNote + supNote + (S.raresOff ? ' &middot; <b>rares excluded from GP</b>' : '') +
     (S.ironman ? ' &middot; <b>alchables priced at high alch</b>' : '') +
     '.<br><b>Left-click a drop to toggle it as left on the ground</b> — excluded from every GP total (planner too).';
+
+  const tv = S.travel[m.unit.id] || {};
+  $('travelBox').innerHTML =
+    'Travel to <b>' + esc(m.unit.label) + '</b>: ' +
+    '<input type="text" id="travelMethod" data-unit="' + esc(m.unit.id) + '" placeholder="your method (e.g. Xeric\'s talisman)" value="' + esc(tv.method || '') + '" style="width:230px;"> ' +
+    '<input type="number" id="travelSec" data-unit="' + esc(m.unit.id) + '" min="0" step="1" placeholder="secs" value="' + (tv.sec != null ? tv.sec : '') + '" style="width:80px;"> s ' +
+    '<span class="hint">saved per kill-option; feeds time &amp; points-per-hour once the DPS engine lands.</span>';
 
   // merge drops across the unit's monsters: name+cat -> expected per unit kill
   const merged = new Map();
@@ -1026,6 +1039,18 @@ function init() {
   });
   $('rewardNames').checked = !!S.rewardNames;
   $('rewardNames').addEventListener('change', () => { S.rewardNames = $('rewardNames').checked; save(); render(); });
+  $('travelBox').addEventListener('input', e => {
+    const uid = e.target.dataset.unit;
+    if (!uid) return;
+    const method = $('travelMethod') ? $('travelMethod').value.trim() : '';
+    const sec = $('travelSec') ? parseFloat($('travelSec').value) : NaN;
+    const cur = S.travel[uid] || {};
+    cur.method = method;
+    if (sec > 0) cur.sec = sec; else delete cur.sec;
+    if (!cur.method && cur.sec == null) delete S.travel[uid]; else S.travel[uid] = cur;
+    save();
+    renderTasks(); // refresh the Travel column without stealing focus from the inputs
+  });
 
   applyLayout();
   render();
