@@ -18,6 +18,6 @@ Known simplifications: boss kills count 1:1 toward the task amount, Konar's per-
 
 No build step for the page itself — open `index.html` locally (it loads `data.js` from the same folder) or serve the folder statically.
 
-## Source visibility
+## License
 
-The source is public for transparency. **All rights reserved** — no permission is granted to reuse, modify, or redistribute this code. Drop rates and game data are derived from the [OSRS Wiki](https://oldschool.runescape.wiki) (CC BY-NC-SA). Old School RuneScape is a trademark of Jagex Ltd; this project is not affiliated with or endorsed by Jagex.
+Licensed under the **GNU General Public License v3.0** — see [LICENSE](LICENSE). The DPS-calculator component incorporates work derived from the [OSRS Wiki DPS calculator](https://tools.runescape.wiki/osrs-dps) (GPL-3.0), which is why this project is GPL-licensed. Drop rates and game data are derived from the [OSRS Wiki](https://oldschool.runescape.wiki) (CC BY-NC-SA). Old School RuneScape is a trademark of Jagex Ltd; this project is not affiliated with or endorsed by Jagex.

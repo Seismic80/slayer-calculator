@@ -143,12 +143,13 @@
         <label for="ironman">Ironman mode — show banked XP from drops</label>
       </div>
       <div class="card" style="padding:10px 12px;margin:0;background:var(--panel2);">
-        <span class="lbl" style="color:var(--muted);font-size:14px;">Bracelets</span>
+        <span class="lbl" style="color:var(--muted);font-size:14px;">Default bracelet (all tasks)</span>
         <div class="radio-group">
           <label><input type="radio" name="bracelet" value="none" checked> None</label>
           <label><input type="radio" name="bracelet" value="slaughter"> Bracelet of slaughter (&asymp;33% more kills/task)</label>
           <label><input type="radio" name="bracelet" value="expeditious"> Expeditious bracelet (&asymp;20% fewer kills/task)</label>
         </div>
+        <div class="hint">Applies to every task; override individual tasks in the <b>Brace</b> column of the task list.</div>
         <div class="toggle-row" style="margin:8px 0 0;">
           <input type="checkbox" id="revSkulled">
           <label for="revSkulled">Skulled (revenant tasks: better uniques, no med helm)</label>
@@ -256,6 +257,7 @@ function ms() {
   const m = S.perMaster[S.master];
   for (const k of ['skipped', 'blocked', 'locked', 'extended']) if (!m[k]) m[k] = [];
   if (!m.kills) m.kills = {};
+  if (!m.brackets) m.brackets = {};   // per-task bracelet override; absent = follow global default
   return m;
 }
 function save() { try { localStorage.setItem('slayercalc-v1', JSON.stringify(S)); } catch (e) {} }
@@ -349,7 +351,15 @@ function statLocked(t) {
   if (!S.stats) return false;
   return (t.slayerReq || 1) > (S.stats.slayer || 1) || (t.combatReq || 3) > combatLevel(S.stats);
 }
-function braceletMult() { return S.bracelet === 'slaughter' ? 4 / 3 : S.bracelet === 'expeditious' ? 0.8 : 1; }
+// effective bracelet for a task: per-task override, else the global default
+function braceletFor(t) {
+  const o = ms().brackets[tKey(t)];
+  return o || S.bracelet;
+}
+function braceletMult(t) {
+  const b = braceletFor(t);
+  return b === 'slaughter' ? 4 / 3 : b === 'expeditious' ? 0.8 : 1;
+}
 
 function unitsOf(t) {
   return t.monsters.map(m => typeof m === 'string'
@@ -420,7 +430,7 @@ function superiorUniqueEV(D) {
 function taskMetrics(t, amount) {
   const u = chosenUnit(t);
   if (!u) return { unit: null, kills: 0, gp: 0, xp: 0, uniq: 0, sup: null };
-  const kills = amount * braceletMult();       // monsters actually slain
+  const kills = amount * braceletMult(t);      // monsters actually slain
   const units = kills / unitCount(u);          // unit kills (rooms, trios, singles)
   const ev = unitEV(u);
   let gp = units * ev.gp, xp = units * ev.xp;
@@ -652,7 +662,7 @@ function renderTasks() {
   let html = '<thead><tr>' +
     '<th class="sortable" data-sort="name">Task</th>' +
     '<th class="sortable" data-sort="chance">Chance</th>' +
-    '<th>Avg #</th><th>Kill</th>' +
+    '<th>Avg #</th><th>Kill</th><th>Brace</th>' +
     '<th class="sortable" data-sort="xp">Slayer XP</th>' +
     '<th class="sortable" data-sort="gp">GP / task</th>' +
     '<th>Expected uniques</th><th>Flags</th></tr></thead><tbody>';
@@ -668,11 +678,17 @@ function renderTasks() {
       ? '<select class="killsel" data-task="' + esc(tKey(t)) + '">' + units.map(u =>
           '<option value="' + esc(u.id) + '"' + (r.m.unit && u.id === r.m.unit.id ? ' selected' : '') + '>' + esc(u.label) + '</option>').join('') + '</select>'
       : esc(r.m.unit ? r.m.unit.label : '—');
+    const braceOverride = ms().brackets[tKey(t)] || '';
+    const braceSel = '<select class="bracesel" data-task="' + esc(tKey(t)) + '" title="Bracelet for this task">' +
+      [['', 'Default'], ['none', 'None'], ['slaughter', 'Slaughter'], ['expeditious', 'Expeditious']]
+        .map(([v, l]) => '<option value="' + v + '"' + (v === braceOverride ? ' selected' : '') + '>' + l + '</option>').join('') +
+      '</select>';
     html += '<tr class="' + cls.join(' ') + '" data-task="' + esc(tKey(t)) + '" title="Left-click: plan to skip">' +
       '<td>' + esc(t.task) + '</td>' +
       '<td class="num">' + (r.chance ? (r.chance * 100).toFixed(1) + '%' : '—') + '</td>' +
       '<td class="num">' + fmtNum(r.n) + '</td>' +
       '<td style="text-align:left">' + killSel + '</td>' +
+      '<td style="text-align:left">' + braceSel + '</td>' +
       '<td class="num">' + fmtNum(r.m.xp) + '</td>' +
       '<td class="num">' + gpSpan(r.m.gp) + '</td>' +
       '<td class="num">' + fmtNum(r.m.uniq, 2) + '</td>' +
@@ -693,8 +709,9 @@ function renderDetail() {
   $('detailTitle').textContent = 'Task breakdown: ' + amount + ' ' + t.task + (m.unit ? ' (killing ' + m.unit.label + ')' : '');
   if (!m.unit) { $('detailIntro').textContent = 'No drop data for this task.'; $('detailTable').innerHTML = ''; $('ironBox').innerHTML = ''; return; }
 
-  const braceletNote = S.bracelet !== 'none'
-    ? ' &middot; ' + (S.bracelet === 'slaughter' ? 'slaughter: ≈' + fmtNum(m.kills) + ' actual kills' : 'expeditious: ≈' + fmtNum(m.kills) + ' actual kills') : '';
+  const braceB = braceletFor(t);
+  const braceletNote = braceB !== 'none'
+    ? ' &middot; ' + braceB + ': ≈' + fmtNum(m.kills) + ' actual kills' : '';
   let supNote = '';
   if (m.sup) supNote = ' &middot; superiors: ' + (m.sup.pHeart * 100).toFixed(2) + '% imbued heart, ' + (m.sup.pGem * 100).toFixed(2) + '% eternal gem';
   $('detailIntro').innerHTML = fmtNum(m.xp) + ' Slayer XP &middot; ' + fmtNum(m.uniq, 2) + ' expected uniques' +
@@ -981,6 +998,13 @@ function init() {
     save(); render();
   });
   $('taskTable').addEventListener('change', e => {
+    const brace = e.target.closest('select.bracesel');
+    if (brace) {
+      if (brace.value) ms().brackets[brace.dataset.task] = brace.value;
+      else delete ms().brackets[brace.dataset.task];
+      save(); render();
+      return;
+    }
     const sel = e.target.closest('select.killsel');
     if (!sel) return;
     ms().kills[sel.dataset.task] = sel.value;
