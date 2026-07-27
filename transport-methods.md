@@ -1,53 +1,56 @@
-# Transport methods per task (item 4 — travel-time seed)
+# Transport methods per kill-location (item 4 — travel-time seed)
 
-Candidate **top-3 transport methods** to each task's usual slayer spot, ranked fastest-first, for you to time manually. These are starting points — replace/reorder them and fill in the **Your time** column from real runs; that data feeds the "time per task" model.
+Travel time is keyed to the **NPC/location you actually kill**, not the task — many tasks have several kill options (a hellhounds task = Hellhound in the Catacombs/Stronghold *or* Cerberus in his lair; a vampyres task = Vyrewatch Sentinel, Venator, *or* Feral Vampyre), and the tool's Kill selector already picks between them. So this table is grouped by **location**, listing which kill-options sit there and the ranked top-3 transports to each. You time each; your runs are the source of truth.
 
-Assumptions: reasonable account progression (fairy rings, standard/Arceuus/Lunar teleports available, common jewellery, slayer ring). Where a monster has several viable spots, the commonly-fastest is listed. Mainland masters only (Duradel / Nieve / Konar) — Krystilia's Wilderness tasks use a different transport set (obelisks, wildy teleports) and aren't included yet.
+**Confidence:** ✓ = verified against the wiki this pass · ~ = solid candidate, validate on your run. Where I'm unsure of an exact fairy-ring code I describe the method rather than assert a wrong code.
 
-Times are the round-trip overhead you pay per task: bank → travel → first kill (banking mid-task is separate).
+Times = per-task overhead: bank → travel → first kill.
 
-| Task | Usual slayer spot | Method 1 | Method 2 | Method 3 | Your time (s) |
-|------|-------------------|----------|----------|----------|:-------------:|
-| Aberrant spectres | Slayer Tower | Slayer ring → Slayer Tower | Fairy ring CKS | Kharyrll/Arceuus → Canifis, run N | |
-| Abyssal demons | Catacombs of Kourend | Xeric's talisman → Xeric's Heart | Kharedst's memoirs | Fairy ring CKS → Slayer Tower basement | |
-| Basilisks | Fremennik Slayer Dungeon | Fairy ring AJR | Rellekka teleport, run | Enchanted lyre → Rellekka | |
-| Black demons | Catacombs of Kourend | Xeric's talisman | Kharedst's memoirs | Fairy ring CKS (or Taverley Dungeon) | |
-| Black dragons | Taverley Dungeon | Falador teleport → run S | Games necklace → Burthorpe, run | Fairy ring BJS (Kourend, brutal blacks) | |
-| Bloodveld | Catacombs of Kourend | Xeric's talisman | Kharedst's memoirs | Slayer ring → Slayer Tower | |
-| Blue dragons | Catacombs of Kourend | Xeric's talisman | Kharedst's memoirs | Fairy ring DKS (Taverley) | |
-| Cave horrors | Mos Le'Harmless cave | Fairy ring not avail — Dive/charter to island | Book of the dead (Harmony?) | Cabin fever boat | |
-| Cave krakens | Kraken Cove | Fairy ring DIP (Kraken Cove) | Piscarilius teleport, run | Ring of the elements (nearby) | |
-| Dagannoth | Waterbirth Island | Fairy ring... n/a — boat from Rellekka | Enchanted lyre → Rellekka, boat | Rellekka teleport, boat | |
-| Dark beasts | Mourner Tunnels / Iorwerth | Slayer ring → Dark beasts | Teleport crystal → Lletya | Fairy ring DLQ, run | |
-| Drakes | Karuulm Slayer Dungeon | Fairy ring... Rada's blessing → Mount Karuulm | Skills necklace → Farming Guild, run | Kourend teleport, run | |
-| Dust devils | Catacombs of Kourend | Xeric's talisman | Kharedst's memoirs | Smoke Dungeon (Pollnivneach carpet) | |
-| Fire giants | Catacombs of Kourend | Xeric's talisman | Kharedst's memoirs | Fairy ring BJS, run | |
-| Gargoyles | Slayer Tower (top) | Slayer ring → Slayer Tower | Fairy ring CKS | Kharyrll → Canifis, run | |
-| Greater demons | Catacombs of Kourend | Xeric's talisman | Kharedst's memoirs | Karuulm demonic ruins (Rada's blessing) | |
-| Hellhounds | Catacombs of Kourend | Xeric's talisman | Kharedst's memoirs | Cerberus: Key master teleport (Taverley) | |
-| Hydras | Karuulm Slayer Dungeon | Rada's blessing → Mount Karuulm | Skills necklace → Farming Guild, run | Kourend teleport, run | |
-| Kalphite | Kalphite Lair (desert) | Nardah teleport / Desert amulet | Camulet / minigame carpet | Fairy ring... n/a, run from Shantay | |
-| Kurask | Fremennik Slayer Dungeon | Fairy ring AJR | Rellekka teleport, run | Enchanted lyre → Rellekka | |
-| Lizardmen | Molch / Lizardman Canyon | Xeric's talisman → Xeric's Lookout | Skills necklace → Woodcutting Guild | Kourend teleport, run | |
-| Mithril/metal dragons | Catacombs / Brimhaven | Xeric's talisman (Kourend) | Karamja gloves → Brimhaven | Fairy ring DKP → run | |
-| Nechryael | Catacombs of Kourend | Xeric's talisman | Kharedst's memoirs | Slayer Tower basement (fairy ring CKS) | |
-| Red dragons | Catacombs of Kourend | Xeric's talisman | Kharedst's memoirs | Fairy ring DKS (Brimhaven) | |
-| Skeletal wyverns | Asgarnian Ice Dungeon | Falador teleport, run S | Games necklace → Burthorpe, run | Fairy ring... n/a | |
-| Smoke devils | Smoke Devil Dungeon | Fairy ring DIP → run | Piscarilius teleport, run | Ring of the elements | |
-| Spiritual creatures | God Wars Dungeon | Games necklace → Burthorpe → Trollheim | Trollheim teleport | Fairy ring... n/a, run from Trollheim | |
-| Suqahs | Lunar Isle | Lunar teleport (Moonclan/Lunar Isle) | Fairy ring... n/a — boat from Rellekka | Enchanted lyre → Rellekka, boat | |
-| Trolls | Trollheim / Death Plateau | Trollheim teleport | Games necklace → Burthorpe, run | Stony basalt (Trollheim) | |
-| TzHaar | Mor Ul Rek (Karamja) | Fairy ring DKP, run | Karamja gloves → Brimhaven, charter | TzHaar teleport (Slayer? no) — glory to Karamja | |
-| Vampyres | Darkmeyer / Slepe | Drakan's medallion → Ver Sinhaza | Kharyrll → Canifis, run | Fairy ring CKR (Canifis) | |
-| Warped creatures | Poison Waste dungeon (Isafdar) | Teleport crystal → Lletya | Fairy ring DLQ | Zul-andra teleport, run | |
-| Waterfiends | Catacombs / Iorwerth | Xeric's talisman (Kourend) | Kharedst's memoirs | Ancient cavern (games necklace → Barbarian) | |
-| Wyrms | Karuulm Slayer Dungeon | Rada's blessing → Mount Karuulm | Skills necklace → Farming Guild, run | Kourend teleport, run | |
-| Aviansie | God Wars Dungeon | Trollheim teleport → run | Games necklace → Burthorpe → Trollheim | Fairy ring... n/a | |
-| Fossil Island wyverns | Fossil Island | Digsite pendant → Fossil Island | House teleport (Fossil Island portal) | Fairy ring... n/a — barge | |
-| Ankou | Catacombs of Kourend | Xeric's talisman | Kharedst's memoirs | Stronghold of Security (Barbarian Village) | |
-| Cave kraken (Konar loc.) | Kraken Cove | Fairy ring DIP | Piscarilius teleport, run | — | |
-| Araxytes | Morytania Spider Cave | Drakan's medallion → Ver Sinhaza | Kharyrll → Canifis, run | Arceuus library teleport, run | |
+## Regular slayer locations
 
-**Boss tasks** (Konar / Like-a-boss) have their own dedicated teleports (e.g. (i) enchanted key / boss-specific items) — I'll add those as a separate section once the regular-task times are validated.
+| Location | Kill-options here | Transport 1 | Transport 2 | Transport 3 | Conf | Your time (s) |
+|----------|-------------------|-------------|-------------|-------------|:---:|:---:|
+| Catacombs of Kourend | Abyssal demon, Ankou, Black demon, Bloodveld, Blue dragon, Fire giant, Greater demon, Hellhound, Nechryael, Skotizo | Xeric's talisman → Xeric's Heart (at the entrance statue) | Kourend Castle teleport spell (Client of Kourend) | Ring of Returning (respawn set to Kourend Castle) | ✓ | |
+| Slayer Tower (Morytania) | Aberrant/Deviant spectre, Gargoyle, Nechryael, Bloodveld, Abyssal demon | Slayer ring → Slayer Tower | Fairy ring **CKS** | Kharyrll/Arceuus → Canifis, run N | ~ | |
+| Grotesque Guardians (Slayer Tower roof) | Grotesque Guardians | Slayer ring → Slayer Tower, up | Fairy ring CKS, up | Drakan's medallion → Ver Sinhaza, run | ~ | |
+| Stronghold Slayer Cave | Hellhound, Greater demon, Nechryael, Bloodveld, Aberrant spectre, Dust devil, Kurask, Cave kraken (no) | Spirit tree → Gnome Stronghold | Fairy ring **CIR** | Slayer ring → Stronghold Slayer Cave | ~ | |
+| Fremennik Slayer Dungeon | Basilisk, Kurask, Turoth | Fairy ring **AJR** | Rellekka teleport, run N | Enchanted lyre → Rellekka | ~ | |
+| Karuulm Slayer Dungeon (Mount Karuulm) | Drake, Hydra, Wyrm, Alchemical Hydra | Rada's blessing 3/4 → Mount Karuulm | Skills necklace → Farming Guild, run S | Kourend Castle teleport, run | ~ | |
+| Smoke Devil Dungeon | Smoke devil, Thermonuclear smoke devil | Fairy ring (Piscarilius / Kraken Cove area), run | Kharedst's memoirs → Piscarilius, run | Ring of the elements | ~ | |
+| Kraken Cove | Cave kraken, Kraken | Fairy ring (Kraken Cove), few steps | Kharedst's memoirs → Piscarilius, run | Ring of the elements | ~ | |
+| God Wars Dungeon | Aviansie, Spiritual mage/ranger/warrior, Kree'arra room, K'ril room, Graardor, Zilyana | Trollheim teleport, run N | Games necklace → Burthorpe → Trollheim | 60% Wilderness → GWD (rev caves / wildy tele) | ~ | |
+| Asgarnian Ice Dungeon | Skeletal Wyvern | Falador teleport, run S to the dungeon | Games necklace → Burthorpe, run S | Ring of wealth → Falador, run | ~ | |
+| Taverley Dungeon | Black dragon, Blue dragon, Hellhound | Falador teleport, run W into the dungeon | Games necklace → Burthorpe, run | Ring of wealth → Falador | ~ | |
+| Cerberus' Lair (deep Taverley) | Cerberus | Key Master teleport (once you have scrolls) | Falador teleport → run through Taverley Dungeon to NE hellhound cave | Games necklace → Burthorpe, run | ✓ | |
+| Kalphite Cave (E of Shantay Pass) | Kalphite Worker, Kalphite Soldier | Desert amulet 4 (teleports directly in) | Achievement diary cape → Shantay Pass, run S | Camulet / carpet → Pollnivneach, run | ✓ | |
+| Kalphite Lair | Kalphite Queen | Desert amulet 4, run (rope needed) | Achievement diary cape → Shantay, run | — | ~ | |
+| Shayzien / Lizardman Canyon / Molch | Lizardman, Lizardman brute, Lizardman shaman | Xeric's talisman → Xeric's Lookout (Shayzien) | Skills necklace → Woodcutting Guild (shamans, Molch) | Kourend Castle teleport, run | ~ | |
+| Waterbirth Island | Dagannoth (+ Prime/Rex/Supreme) | Lunar spellbook → Waterbirth teleport | Rellekka teleport → boat | Enchanted lyre → Rellekka → boat | ~ | |
+| Lunar Isle | Suqah | Lunar Isle teleport (Lunar spellbook) | Fremennik boat (Rellekka) | — | ~ | |
+| Fossil Island (Wyvern Cave) | Spitting Wyvern, Ancient Wyvern | Digsite pendant → Fossil Island | House teleport (Fossil Island portal) | Mushtree / barge | ~ | |
+| Iorwerth Dungeon (Prifddinas) | Waterfiend, Elf warrior, Dark beast | Teleport crystal → Prifddinas | Fairy ring near Prifddinas, run | Ring of returning / Zul-andra, run | ~ | |
+| Mourner Tunnels | Dark beast | Slayer ring → Dark beasts | Teleport crystal → Lletya, run | Fairy ring **DLQ**, run | ~ | |
+| Poison Waste Dungeon (Isafdar) | Warped Terrorbird, Warped Tortoise, Warped Jelly, Zulrah | Teleport crystal → Prifddinas, run S | Fairy ring **DLQ** | Zul-andra teleport (Zulrah) | ~ | |
+| Brimhaven Dungeon | Bronze/Iron/Steel dragon, Greater demon, Black demon, Red dragon | Karamja gloves → Brimhaven | Fairy ring **DKP**, run | Charter ship → Brimhaven | ~ | |
+| Lithkren Vault | Adamant dragon, Rune dragon | Digsite pendant → Fossil Island → mushtree → Lithkren | Fairy ring near Lithkren (DS2) | — | ~ | |
+| Mos Le'Harmless Cave | Cave horror | Cabin Fever boat from Brimhaven | Book of the dead? (no) — charter to island | Fairy ring not available | ~ | |
+| Trollheim / Death Plateau | Mountain troll | Trollheim teleport | Games necklace → Burthorpe, run | Stony basalt → Trollheim | ~ | |
+| Fremennik Isles / Trollweiss | Ice troll male | Fremennik boat (Rellekka) → Neitiznot/Jatizso | Enchanted lyre → Rellekka | — | ~ | |
+| Darkmeyer | Vyrewatch Sentinel | Drakan's medallion → Darkmeyer | Kharyrll/Arceuus → Canifis, run | — | ✓ | |
+| Vampyrium (Blood Moon Rises) | **Venator** (74 Slayer), Maggot King | Drakan's medallion → Darkmeyer/Slepe, run (verify exact tp) | Quest-area teleport | — | ✓ NPC / ~ tp | |
+| Haunted Woods / Slepe | Feral Vampyre | Kharyrll/Arceuus → Canifis, run E | Drakan's medallion → Slepe | Fairy ring **CKS/CKR**, run | ~ | |
+| Morytania Spider Cave | Araxyte, Araxxor | Drakan's medallion → Ver Sinhaza, run | Arceuus library / Kharyrll → Canifis, run | — | ~ | |
+| Brine Rat Cavern | Brine rat | Rellekka teleport, run N (Olaf's Quest) | Enchanted lyre → Rellekka | — | ~ | |
+| Zanaris / Fossil Island | Zygomite, Ancient Zygomite, Mutated Zygomite | Digsite pendant → Fossil Island (Ancient) | Dramen staff → Zanaris | House (Zanaris? no) | ~ | |
+| Stalker Den (Shadows of Custodia) | Custodian stalkers (Elder/Mature/Juvenile) | Quest-area teleport (verify) | — | — | ~ (newer content) | |
+| Neypotzli / Ruins of Tapoyauik | Lesser Nagua (Sulphur/Frost) | Perilous Moons area teleport (verify) | — | — | ~ (newer content) | |
 
-**Method key:** "Xeric's talisman" = Xeric's Heart/Lookout/etc.; "Kharedst's memoirs" = book teleports (Kourend); "Rada's blessing" = Kourend Favour reward; "Slayer ring" = Slayer Tower / Stronghold / Tarn's / Dark beasts; "fairy ring XYZ" = the code for that ring.
+## Boss lairs & alternatives (to verify next pass — placeholder methods)
+
+These are the boss kill-options; each has a dedicated route I'll verify properly rather than guess:
+
+- **Vorkath** (Ungael) · **Zulrah** (Poison Waste) · **Sarachnis** (Forthos Dungeon) · **Giant Mole** (Falador mole lair) · **Kalphite Queen** (Kalphite Lair) · **King Black Dragon** (KBD lair) · **Kraken / Thermonuclear smoke devil** (see dungeons above) · **Abyssal Sire** (Abyssal Nexus) · **Demonic gorilla** (Crash Site Cavern) · **Skotizo** (Catacombs, dark totem) · **Tormented Demon** · **Grotesque Guardians** (above) · **Araxxor** (above) · **Maggot King** (Vampyrium) · **Shellbane gryphon** · DT2 bosses **Duke Sucellus / The Leviathan / The Whisperer / Vardorvis** · **Phantom Muspah** (Ghorrock).
+
+## Wilderness (Krystilia — separate transport model)
+
+Wilderness kill-options (Callisto/Artio, Vet'ion/Calvar'ion, Venenatis/Spindel, Scorpia, Chaos Elemental, Chaos Fanatic, Crazy archaeologist, plus wildy slayer monsters) reach their spots via Wilderness obelisks, the wilderness teleport lever, Ferox Enclave, and burning-amulet/games-necklace wildy teleports — a distinct set I'll table separately if you want Krystilia covered.

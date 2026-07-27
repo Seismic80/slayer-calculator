@@ -183,7 +183,7 @@ const CANDIDATES = {
   'Trolls': ['Mountain troll', 'Ice troll male'],
   'Turoths': ['Turoth'],
   'TzHaar': ['TzHaar-Ket'],
-  'Vampyres': ['Feral Vampyre', 'Vyrewatch Sentinel'],
+  'Vampyres': ['Vyrewatch Sentinel', 'Venator', 'Feral Vampyre'],
   'Warped creatures': ['Warped Terrorbird', 'Warped Tortoise'],
   'Waterfiends': ['Waterfiend'],
   'Wyrms': ['Wyrm'],
