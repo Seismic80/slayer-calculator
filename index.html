@@ -91,6 +91,8 @@
   tr.task-row.blocked td, tr.task-row.locked td { color: var(--muted); opacity: .5; }
   tr.task-row.current td { background: rgba(255,255,0,.07); }
   td select.killsel { width: auto; max-width: 170px; padding: 2px 4px; font-size: 14px; }
+  /* single-option kills render as plain text; pad to match the select's border+padding inset */
+  .killstatic { display: inline-block; padding-left: 5px; }
   .flag { display: inline-block; min-width: 21px; text-align: center; padding: 1px 3px; margin-left: 3px;
     border: 1px solid var(--edge); border-radius: 2px; background: var(--panel2); color: var(--muted);
     font-size: 13px; cursor: pointer; text-decoration: none !important; }
@@ -682,7 +684,7 @@ function renderTasks() {
     const killSel = units.length > 1
       ? '<select class="killsel" data-task="' + esc(tKey(t)) + '">' + units.map(u =>
           '<option value="' + esc(u.id) + '"' + (r.m.unit && u.id === r.m.unit.id ? ' selected' : '') + '>' + esc(u.label) + '</option>').join('') + '</select>'
-      : esc(r.m.unit ? r.m.unit.label : '—');
+      : '<span class="killstatic">' + esc(r.m.unit ? r.m.unit.label : '—') + '</span>';
     const braceOverride = ms().brackets[tKey(t)] || '';
     const braceSel = '<select class="bracesel" data-task="' + esc(tKey(t)) + '" title="Bracelet for this task">' +
       [['', 'Default'], ['none', 'None'], ['slaughter', 'Slaughter'], ['expeditious', 'Expeditious']]
