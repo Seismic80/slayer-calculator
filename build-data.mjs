@@ -359,12 +359,29 @@ async function loadSubtable(name) {
 }
 
 /* ---------------- monster page parsing ---------------- */
+// Defender combat stats for the DPS engine (Infobox Monster fields).
+// drange: modern single ranged-defence bonus, else legacy dstandard.
+function parseCombat(wt) {
+  const num = f => { const m = wt.match(new RegExp('\\|\\s*' + f + '\\d?\\s*=\\s*(-?\\d+(?:\\.\\d+)?)')); return m ? +m[1] : null; };
+  const txt = f => { const m = wt.match(new RegExp('\\|\\s*' + f + '\\s*=\\s*([^\\n|]+)')); return m ? m[1].trim() : null; };
+  const attrsRaw = (txt('attributes') || '').toLowerCase().replace(/\[\[|\]\]/g, '');
+  return {
+    def: num('def'), mage: num('mage'), range: num('range'),
+    dstab: num('dstab'), dslash: num('dslash'), dcrush: num('dcrush'),
+    dmagic: num('dmagic'), drange: num('drange') ?? num('dstandard'),
+    size: num('size'),
+    attrs: attrsRaw ? attrsRaw.split(/[,;]/).map(s => s.trim()).filter(Boolean) : [],
+    weakType: (txt('elementalweaknesstype') || '').toLowerCase().replace(/\[\[|\]\]/g, '').trim() || null,
+    weakPct: num('elementalweaknesspercent'),
+  };
+}
 function parseMonster(title, wt, warn) {
   const info = {};
   for (const f of ['hitpoints', 'slayxp', 'combat']) {
     const m = wt.match(new RegExp('\\|' + f + '\\d?\\s*=\\s*([\\d.]+)'));
     info[f] = m ? +m[1] : null;
   }
+  const cb = parseCombat(wt);
   // page-level arithmetic vars, e.g. {{#vardefine:herbbase|{{#expr:1/(...)}}}}
   // or plain {{#vardefine:allotseed|15/128 / 128}}
   const vars = {};
@@ -405,7 +422,7 @@ function parseMonster(title, wt, warn) {
     const isRDT = /rare/i.test(m[1]);
     drops.push({ name: isRDT ? 'Rare drop table roll' : 'Gem drop table roll', qty: 1, rate: base ?? 1 / 128, cat: 'other', gemw: false });
   }
-  return { title, hp: info.hitpoints, slayxp: info.slayxp || info.hitpoints, combat: info.combat, drops, subtableCalls };
+  return { title, hp: info.hitpoints, slayxp: info.slayxp || info.hitpoints, combat: info.combat, cb, drops, subtableCalls };
 }
 
 /* ---------------- main ---------------- */
@@ -512,6 +529,7 @@ async function main() {
       if (m2) monsters[target][{ hitpoints: 'hp', slayxp: 'slayxp', combat: 'combat' }[f]] = +m2[1];
     }
     if (!monsters[target].slayxp) monsters[target].slayxp = monsters[target].hp;
+    if (!monsters[target].cb || monsters[target].cb.def == null) monsters[target].cb = parseCombat(wt2);
   }
 
   // 4. prices: mapping + latest for every referenced item
