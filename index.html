@@ -178,6 +178,10 @@
         <label class="field" style="margin:0;"><span class="lbl">Potion</span><select id="cbPotion"></select></label>
         <label class="field" style="margin:0;"><span class="lbl">Salve amulet</span><select id="cbSalve"><option value="None">None</option><option value="Salve (ei)">Salve (ei)</option><option value="Salve (i)">Salve (i)</option></select></label>
       </div>
+      <div id="spellRow" style="display:none;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;">
+        <label class="field" style="margin:0;"><span class="lbl">Spell</span><select id="cbSpell"></select></label>
+        <label class="field" id="customSpellRow" style="margin:0;display:none;"><span class="lbl">Custom max hit</span><input type="number" id="cbCustomSpell" min="0"></label>
+      </div>
       <div class="toggle-row" style="margin:8px 0 0;"><input type="checkbox" id="cbSlayerHelm"><label for="cbSlayerHelm">Slayer helmet (i) on task (black-mask bonus)</label></div>
       <details id="gearDetails" style="margin-top:6px;"><summary style="color:var(--accent);cursor:pointer;font-size:14px;">Gear (click to set 11 slots)</summary>
         <div id="gearGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;"></div>
@@ -283,6 +287,7 @@ let S = {
     atk: 99, str: 99, def: 99, ranged: 99, magic: 99, hp: 99,
     style: 'melee', attackStyle: 'slash', stance: 'Aggressive',
     prayer: 'None', potion: 'None', salve: 'None', slayerHelm: true,
+    spell: 'Ice Barrage', customSpellMax: 0,
     gear: { head: '', cape: '', neck: '', ammo: '', weapon: 'Abyssal whip', body: '', shield: '', legs: '', hands: '', feet: '', ring: '' },
   },
   perMaster: {}, excluded: [],
@@ -311,6 +316,21 @@ const STANCES = {
   ranged: { 'Rapid': {}, 'Accurate': { ranged: 3 } },
   magic: { 'Standard': {} },
 };
+// standard-spellbook base max hits carry an element (air/water/earth/fire) that
+// triggers a monster's elemental weakness; ancient spells carry none.
+const SPELLS = {
+  'None': null,
+  'Wind Strike': { max: 2, el: 'air' }, 'Water Strike': { max: 4, el: 'water' }, 'Earth Strike': { max: 6, el: 'earth' }, 'Fire Strike': { max: 8, el: 'fire' },
+  'Wind Bolt': { max: 9, el: 'air' }, 'Water Bolt': { max: 10, el: 'water' }, 'Earth Bolt': { max: 11, el: 'earth' }, 'Fire Bolt': { max: 12, el: 'fire' },
+  'Wind Blast': { max: 13, el: 'air' }, 'Water Blast': { max: 14, el: 'water' }, 'Earth Blast': { max: 15, el: 'earth' }, 'Fire Blast': { max: 16, el: 'fire' },
+  'Wind Wave': { max: 17, el: 'air' }, 'Water Wave': { max: 18, el: 'water' }, 'Earth Wave': { max: 19, el: 'earth' }, 'Fire Wave': { max: 20, el: 'fire' },
+  'Wind Surge': { max: 21, el: 'air' }, 'Water Surge': { max: 22, el: 'water' }, 'Earth Surge': { max: 23, el: 'earth' }, 'Fire Surge': { max: 24, el: 'fire' },
+  'Ice Rush': { max: 16 }, 'Ice Burst': { max: 22 }, 'Ice Blitz': { max: 26 }, 'Ice Barrage': { max: 30 },
+  'Blood Rush': { max: 15 }, 'Blood Burst': { max: 21 }, 'Blood Blitz': { max: 25 }, 'Blood Barrage': { max: 29 },
+  'Smoke Rush': { max: 13 }, 'Smoke Burst': { max: 19 }, 'Smoke Blitz': { max: 23 }, 'Smoke Barrage': { max: 27 },
+  'Shadow Rush': { max: 14 }, 'Shadow Burst': { max: 20 }, 'Shadow Blitz': { max: 24 }, 'Shadow Barrage': { max: 28 },
+  'Custom / powered staff': { max: 0, custom: true },
+};
 // aggregate equipped gear into { atkBonus, strBonus, speed, magicDmg } for the chosen style
 function gearBonuses() {
   const C = S.combat;
@@ -336,7 +356,12 @@ function buildLoadout() {
   L.prayer = { atk: pr.atk || 1, str: pr.str || 1, ranged: pr.ranged || 1, rangedStr: pr.rangedStr, magic: pr.magic || 1 };
   const pot = (POTIONS[C.potion] || (() => ({})))({ atk: C.atk, str: C.str, ranged: C.ranged, magic: C.magic });
   L.boost = { atk: pot.atk || 0, str: pot.str || 0, ranged: pot.ranged || 0, magic: pot.magic || 0 };
-  if (C.style === 'magic') { L.magicDmg = g.magicDmg; L.spellMax = 0; } // spell selection: later stage
+  if (C.style === 'magic') {
+    const sp = SPELLS[C.spell] || {};
+    L.magicDmg = g.magicDmg;
+    L.spellMax = sp.custom ? (C.customSpellMax || 0) : (sp.max || 0);
+    L.spellElement = sp.el || null;
+  }
   return L;
 }
 // on-task black-mask/slayer-helm and salve multipliers (don't stack — take higher)
@@ -375,6 +400,7 @@ function refreshStyleSelects() {
   const stanceOpts = Object.keys(STANCES[C.style] || {});
   if (!stanceOpts.includes(C.stance)) C.stance = stanceOpts[0];
   fillSel($('cbStance'), stanceOpts, C.stance);
+  $('spellRow').style.display = C.style === 'magic' ? 'grid' : 'none';
 }
 function syncCombatInputs() {
   const C = S.combat;
@@ -392,6 +418,9 @@ function initCombat() {
   $('cbStyle').value = C.style;
   fillSel($('cbPrayer'), Object.keys(PRAYERS), C.prayer);
   fillSel($('cbPotion'), Object.keys(POTIONS), C.potion);
+  fillSel($('cbSpell'), Object.keys(SPELLS), C.spell);
+  $('cbCustomSpell').value = C.customSpellMax || 0;
+  $('customSpellRow').style.display = (SPELLS[C.spell] || {}).custom ? '' : 'none';
   $('cbSalve').value = C.salve;
   $('cbSlayerHelm').checked = !!C.slayerHelm;
   refreshStyleSelects();
@@ -414,6 +443,8 @@ function initCombat() {
   $('cbStance').addEventListener('change', () => { C.stance = $('cbStance').value; save(); render(); });
   $('cbPrayer').addEventListener('change', () => { C.prayer = $('cbPrayer').value; save(); render(); });
   $('cbPotion').addEventListener('change', () => { C.potion = $('cbPotion').value; save(); render(); });
+  $('cbSpell').addEventListener('change', () => { C.spell = $('cbSpell').value; $('customSpellRow').style.display = (SPELLS[C.spell] || {}).custom ? '' : 'none'; save(); render(); });
+  $('cbCustomSpell').addEventListener('input', () => { C.customSpellMax = +$('cbCustomSpell').value || 0; save(); render(); });
   $('cbSalve').addEventListener('change', () => { C.salve = $('cbSalve').value; save(); render(); });
   $('cbSlayerHelm').addEventListener('change', () => { C.slayerHelm = $('cbSlayerHelm').checked; save(); render(); });
   $('gearGrid').addEventListener('input', e => { const inp = e.target.closest('input[data-slot]'); if (!inp) return; C.gear[inp.dataset.slot] = inp.value.trim(); save(); render(); });
@@ -423,9 +454,15 @@ function renderCombatReadout() {
   const unit = t ? chosenUnit(t) : null;
   const mon = unit ? DATA.monsters[resolveMon(unit.monsters[0])] : null;
   const r = mon ? dpsForMonster(mon) : null;
+  let weakNote = '';
+  if (r && mon.cb && mon.cb.weakType) {
+    const matched = S.combat.style === 'magic' && (SPELLS[S.combat.spell] || {}).el === mon.cb.weakType;
+    weakNote = ' <span class="hint">· ' + esc(mon.cb.weakType) + ' weakness ' + mon.cb.weakPct + '%' +
+      (S.combat.style === 'magic' ? (matched ? ' (applied)' : ' — cast ' + esc(mon.cb.weakType) + ' spells') : '') + '</span>';
+  }
   $('dpsReadout').innerHTML = r
-    ? 'DPS vs <b>' + esc(mon.title.replace(' (on task)', '')) + '</b>: <b style="color:var(--value)">' + r.dps.toFixed(2) + '</b> · max ' + r.maxHit + ' · acc ' + (r.accuracy * 100).toFixed(1) + '%'
-    : '<span class="hint">' + (S.combat.style === 'magic' ? 'Magic needs spell selection (coming next stage).' : 'Pick gear + levels to compute DPS.') + '</span>';
+    ? 'DPS vs <b>' + esc(mon.title.replace(' (on task)', '')) + '</b>: <b style="color:var(--value)">' + r.dps.toFixed(2) + '</b> · max ' + r.maxHit + ' · acc ' + (r.accuracy * 100).toFixed(1) + '%' + weakNote
+    : '<span class="hint">Pick gear + levels to compute DPS.</span>';
 }
 function travelSec(unit) { const tv = unit && S.travel[unit.id]; return tv && tv.sec > 0 ? tv.sec : null; }
 function fmtTravel(sec) { return sec == null ? '—' : sec >= 60 ? Math.floor(sec / 60) + 'm ' + (sec % 60) + 's' : sec + 's'; }

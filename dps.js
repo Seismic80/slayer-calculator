@@ -62,7 +62,10 @@
     if (L.style === 'magic') {
       effAtk = effLevel(L.magic || 1, b.magic, p.magic, s.magic, 9);
       atkBonus = L.atkBonus || 0;
-      maxHit = Math.floor((L.spellMax || 0) * (1 + (L.magicDmg || 0)) * dmgMult);
+      // elemental weakness: matching-element spell adds weakPct% to magic damage
+      let weak = 0;
+      if (L.spellElement && cb && cb.weakType === L.spellElement && cb.weakPct) weak = cb.weakPct / 100;
+      maxHit = Math.floor((L.spellMax || 0) * (1 + (L.magicDmg || 0) + weak) * dmgMult);
       defLvl = cb && cb.mage != null ? cb.mage : (cb ? cb.def : 1);
       defBonus = cb ? cb.dmagic : 0;
     } else if (L.style === 'ranged') {
