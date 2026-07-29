@@ -160,6 +160,32 @@
     </div>
 
     <div class="card">
+      <h2>Combat setup (DPS)</h2>
+      <p class="hint" style="margin-top:0;">Levels auto-fill from your RSN. Pick gear + options; DPS drives the Kill-time column.</p>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
+        <label class="field" style="margin:0;"><span class="lbl">Attack</span><input type="number" id="cbAtk" min="1" max="99"></label>
+        <label class="field" style="margin:0;"><span class="lbl">Strength</span><input type="number" id="cbStr" min="1" max="99"></label>
+        <label class="field" style="margin:0;"><span class="lbl">Defence</span><input type="number" id="cbDef" min="1" max="99"></label>
+        <label class="field" style="margin:0;"><span class="lbl">Ranged</span><input type="number" id="cbRanged" min="1" max="99"></label>
+        <label class="field" style="margin:0;"><span class="lbl">Magic</span><input type="number" id="cbMagic" min="1" max="99"></label>
+        <label class="field" style="margin:0;"><span class="lbl">Hitpoints</span><input type="number" id="cbHp" min="1" max="99"></label>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;">
+        <label class="field" style="margin:0;"><span class="lbl">Combat style</span><select id="cbStyle"><option value="melee">Melee</option><option value="ranged">Ranged</option><option value="magic">Magic</option></select></label>
+        <label class="field" style="margin:0;"><span class="lbl">Attack type</span><select id="cbAttackStyle"></select></label>
+        <label class="field" style="margin:0;"><span class="lbl">Stance</span><select id="cbStance"></select></label>
+        <label class="field" style="margin:0;"><span class="lbl">Prayer</span><select id="cbPrayer"></select></label>
+        <label class="field" style="margin:0;"><span class="lbl">Potion</span><select id="cbPotion"></select></label>
+        <label class="field" style="margin:0;"><span class="lbl">Salve amulet</span><select id="cbSalve"><option value="None">None</option><option value="Salve (ei)">Salve (ei)</option><option value="Salve (i)">Salve (i)</option></select></label>
+      </div>
+      <div class="toggle-row" style="margin:8px 0 0;"><input type="checkbox" id="cbSlayerHelm"><label for="cbSlayerHelm">Slayer helmet (i) on task (black-mask bonus)</label></div>
+      <details id="gearDetails" style="margin-top:6px;"><summary style="color:var(--accent);cursor:pointer;font-size:14px;">Gear (click to set 11 slots)</summary>
+        <div id="gearGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;"></div>
+      </details>
+      <div id="dpsReadout" style="margin-top:10px;font-size:14px;"></div>
+    </div>
+
+    <div class="card">
       <h2>Slayer rewards</h2>
       <p class="hint" style="margin-top:0;">Tick what you've bought — unlocks gate tasks, extensions raise amounts.</p>
       <div class="toggle-row"><input type="checkbox" id="rewardNames"><label for="rewardNames">Show in-game reward names</label></div>
@@ -253,12 +279,154 @@ let S = {
   rsn: '', stats: null, // hiscores levels via Wise Old Man
   process: {},          // ironman processing choice per item name
   travel: {},           // custom travel time per kill-option id: { method, sec }
+  combat: {             // DPS setup
+    atk: 99, str: 99, def: 99, ranged: 99, magic: 99, hp: 99,
+    style: 'melee', attackStyle: 'slash', stance: 'Aggressive',
+    prayer: 'None', potion: 'None', salve: 'None', slayerHelm: true,
+    gear: { head: '', cape: '', neck: '', ammo: '', weapon: 'Abyssal whip', body: '', shield: '', legs: '', hands: '', feet: '', ring: '' },
+  },
   perMaster: {}, excluded: [],
 };
 try { Object.assign(S, JSON.parse(localStorage.getItem('slayercalc-v1') || '{}')); } catch (e) {}
 if (!S.rewards) S.rewards = {};
 if (!S.process) S.process = {};
 if (!S.travel) S.travel = {};
+if (!S.combat) S.combat = { atk: 99, str: 99, def: 99, ranged: 99, magic: 99, hp: 99, style: 'melee', attackStyle: 'slash', stance: 'Aggressive', prayer: 'None', potion: 'None', salve: 'None', slayerHelm: true, gear: {} };
+if (!S.combat.gear) S.combat.gear = {};
+
+/* ---------- DPS combat setup ---------- */
+const GEAR_SLOTS = ['head', 'cape', 'neck', 'ammo', 'weapon', 'body', 'shield', 'legs', 'hands', 'feet', 'ring'];
+const PRAYERS = { 'None': {}, 'Piety': { atk: 1.20, str: 1.23 }, 'Chivalry': { atk: 1.15, str: 1.18 }, 'Rigour': { ranged: 1.20, rangedStr: 1.23 }, 'Eagle Eye': { ranged: 1.15, rangedStr: 1.15 }, 'Augury': { magic: 1.25 }, 'Mystic Might': { magic: 1.15 } };
+const POTIONS = {
+  'None': () => ({}),
+  'Super combat': L => ({ atk: Math.floor(L.atk * 0.15) + 5, str: Math.floor(L.str * 0.15) + 5 }),
+  'Super attack': L => ({ atk: Math.floor(L.atk * 0.15) + 5 }),
+  'Super strength': L => ({ str: Math.floor(L.str * 0.15) + 5 }),
+  'Ranging / Divine bastion': L => ({ ranged: Math.floor(L.ranged * 0.10) + 4 }),
+  'Magic potion': () => ({ magic: 4 }),
+  'Imbued heart': L => ({ magic: Math.floor(L.magic * 0.10) + 1 }),
+};
+const STANCES = {
+  melee: { 'Accurate': { atk: 3 }, 'Aggressive': { str: 3 }, 'Controlled': { atk: 1, str: 1 } },
+  ranged: { 'Rapid': {}, 'Accurate': { ranged: 3 } },
+  magic: { 'Standard': {} },
+};
+// aggregate equipped gear into { atkBonus, strBonus, speed, magicDmg } for the chosen style
+function gearBonuses() {
+  const C = S.combat;
+  const oIdx = C.style === 'ranged' ? 4 : C.style === 'magic' ? 3 : { stab: 0, slash: 1, crush: 2 }[C.attackStyle];
+  const bIdx = C.style === 'ranged' ? 1 : C.style === 'magic' ? 2 : 0;
+  let atkBonus = 0, strBonus = 0, speed = 4, magicDmg = 0;
+  for (const slot of GEAR_SLOTS) {
+    const name = C.gear[slot]; if (!name || typeof EQUIPMENT === 'undefined') continue;
+    const it = (EQUIPMENT[slot] || []).find(x => x.n === name); if (!it) continue;
+    atkBonus += it.o[oIdx] || 0;
+    if (C.style === 'magic') magicDmg += (it.b[2] || 0) / 100; else strBonus += it.b[bIdx] || 0;
+    if (slot === 'weapon') speed = it.sp || 4;
+  }
+  return { atkBonus, strBonus, speed, magicDmg };
+}
+function buildLoadout() {
+  const C = S.combat, g = gearBonuses();
+  const L = { style: C.style, attackStyle: C.attackStyle, atk: C.atk, str: C.str, ranged: C.ranged, magic: C.magic, atkBonus: g.atkBonus, strBonus: g.strBonus, speed: g.speed };
+  const st = (STANCES[C.style] || {})[C.stance] || {};
+  L.stance = { atk: st.atk || 0, str: st.str || 0, ranged: st.ranged || 0 };
+  if (C.style === 'ranged' && C.stance === 'Rapid') L.speed = Math.max(1, g.speed - 1);
+  const pr = PRAYERS[C.prayer] || {};
+  L.prayer = { atk: pr.atk || 1, str: pr.str || 1, ranged: pr.ranged || 1, rangedStr: pr.rangedStr, magic: pr.magic || 1 };
+  const pot = (POTIONS[C.potion] || (() => ({})))({ atk: C.atk, str: C.str, ranged: C.ranged, magic: C.magic });
+  L.boost = { atk: pot.atk || 0, str: pot.str || 0, ranged: pot.ranged || 0, magic: pot.magic || 0 };
+  if (C.style === 'magic') { L.magicDmg = g.magicDmg; L.spellMax = 0; } // spell selection: later stage
+  return L;
+}
+// on-task black-mask/slayer-helm and salve multipliers (don't stack — take higher)
+function combatMult(cb) {
+  const C = S.combat;
+  const undead = cb && cb.attrs && cb.attrs.includes('undead');
+  let helm = 1;
+  if (C.slayerHelm) helm = C.style === 'melee' ? 7 / 6 : 1.15;
+  let salve = 1;
+  if (undead && C.salve !== 'None') salve = C.salve === 'Salve (ei)' ? 1.20 : (C.style === 'melee' ? 7 / 6 : 1);
+  const m = Math.max(helm, salve);
+  return { acc: m, dmg: m };
+}
+function dpsForMonster(mon) {
+  if (!mon || !mon.cb || mon.cb.def == null || typeof DPS === 'undefined') return null;
+  const L = buildLoadout(), m = combatMult(mon.cb);
+  L.accMult = m.acc; L.dmgMult = m.dmg;
+  return DPS.computeDps(L, mon.cb);
+}
+// combat seconds for a task: (actual kills x monster HP) / dps, using the chosen unit's primary monster
+function combatTime(unit, kills) {
+  if (!unit) return null;
+  const mon = DATA.monsters[resolveMon(unit.monsters[0])];
+  if (!mon || !mon.hp) return null;
+  const r = dpsForMonster(mon);
+  return r && r.dps > 0 ? kills * mon.hp / r.dps : null;
+}
+function fmtDur(sec) { if (sec == null) return '—'; sec = Math.round(sec); return sec >= 60 ? Math.floor(sec / 60) + 'm ' + (sec % 60) + 's' : sec + 's'; }
+function fillSel(el, options, current) { el.innerHTML = options.map(o => '<option value="' + esc(o) + '"' + (o === current ? ' selected' : '') + '>' + esc(o) + '</option>').join(''); }
+function refreshStyleSelects() {
+  const C = S.combat;
+  const atkOpts = C.style === 'melee' ? ['stab', 'slash', 'crush'] : C.style === 'ranged' ? ['ranged'] : ['magic'];
+  if (C.style !== 'melee') C.attackStyle = atkOpts[0];
+  fillSel($('cbAttackStyle'), atkOpts, C.attackStyle);
+  $('cbAttackStyle').disabled = C.style !== 'melee';
+  const stanceOpts = Object.keys(STANCES[C.style] || {});
+  if (!stanceOpts.includes(C.stance)) C.stance = stanceOpts[0];
+  fillSel($('cbStance'), stanceOpts, C.stance);
+}
+function syncCombatInputs() {
+  const C = S.combat;
+  for (const [id, k] of [['cbAtk', 'atk'], ['cbStr', 'str'], ['cbDef', 'def'], ['cbRanged', 'ranged'], ['cbMagic', 'magic'], ['cbHp', 'hp']]) if ($(id)) $(id).value = C[k];
+}
+function applyStatsToCombat() {
+  if (!S.stats) return;
+  for (const [k, s] of Object.entries({ atk: 'attack', str: 'strength', def: 'defence', ranged: 'ranged', magic: 'magic', hp: 'hitpoints' }))
+    if (S.stats[s]) S.combat[k] = S.stats[s];
+  syncCombatInputs();
+}
+function initCombat() {
+  const C = S.combat;
+  syncCombatInputs();
+  $('cbStyle').value = C.style;
+  fillSel($('cbPrayer'), Object.keys(PRAYERS), C.prayer);
+  fillSel($('cbPotion'), Object.keys(POTIONS), C.potion);
+  $('cbSalve').value = C.salve;
+  $('cbSlayerHelm').checked = !!C.slayerHelm;
+  refreshStyleSelects();
+  $('gearGrid').innerHTML = GEAR_SLOTS.map(slot => {
+    const opts = typeof EQUIPMENT !== 'undefined' ? (EQUIPMENT[slot] || []) : [];
+    const dl = 'dl-' + slot;
+    return '<label class="field" style="margin:0;"><span class="lbl" style="text-transform:capitalize;">' + slot + '</span>' +
+      '<input type="text" list="' + dl + '" data-slot="' + slot + '" value="' + esc(C.gear[slot] || '') + '" placeholder="none"></label>' +
+      '<datalist id="' + dl + '">' + opts.map(o => '<option value="' + esc(o.n) + '">').join('') + '</datalist>';
+  }).join('');
+  const bind = (id, fn) => $(id).addEventListener('input', () => { fn(); save(); render(); });
+  bind('cbAtk', () => C.atk = +$('cbAtk').value || 1);
+  bind('cbStr', () => C.str = +$('cbStr').value || 1);
+  bind('cbDef', () => C.def = +$('cbDef').value || 1);
+  bind('cbRanged', () => C.ranged = +$('cbRanged').value || 1);
+  bind('cbMagic', () => C.magic = +$('cbMagic').value || 1);
+  bind('cbHp', () => C.hp = +$('cbHp').value || 1);
+  $('cbStyle').addEventListener('change', () => { C.style = $('cbStyle').value; refreshStyleSelects(); save(); render(); });
+  $('cbAttackStyle').addEventListener('change', () => { C.attackStyle = $('cbAttackStyle').value; save(); render(); });
+  $('cbStance').addEventListener('change', () => { C.stance = $('cbStance').value; save(); render(); });
+  $('cbPrayer').addEventListener('change', () => { C.prayer = $('cbPrayer').value; save(); render(); });
+  $('cbPotion').addEventListener('change', () => { C.potion = $('cbPotion').value; save(); render(); });
+  $('cbSalve').addEventListener('change', () => { C.salve = $('cbSalve').value; save(); render(); });
+  $('cbSlayerHelm').addEventListener('change', () => { C.slayerHelm = $('cbSlayerHelm').checked; save(); render(); });
+  $('gearGrid').addEventListener('input', e => { const inp = e.target.closest('input[data-slot]'); if (!inp) return; C.gear[inp.dataset.slot] = inp.value.trim(); save(); render(); });
+}
+function renderCombatReadout() {
+  const t = taskList().find(x => tKey(x) === S.curTask) || taskList()[0];
+  const unit = t ? chosenUnit(t) : null;
+  const mon = unit ? DATA.monsters[resolveMon(unit.monsters[0])] : null;
+  const r = mon ? dpsForMonster(mon) : null;
+  $('dpsReadout').innerHTML = r
+    ? 'DPS vs <b>' + esc(mon.title.replace(' (on task)', '')) + '</b>: <b style="color:var(--value)">' + r.dps.toFixed(2) + '</b> · max ' + r.maxHit + ' · acc ' + (r.accuracy * 100).toFixed(1) + '%'
+    : '<span class="hint">' + (S.combat.style === 'magic' ? 'Magic needs spell selection (coming next stage).' : 'Pick gear + levels to compute DPS.') + '</span>';
+}
 function travelSec(unit) { const tv = unit && S.travel[unit.id]; return tv && tv.sec > 0 ? tv.sec : null; }
 function fmtTravel(sec) { return sec == null ? '—' : sec >= 60 ? Math.floor(sec / 60) + 'm ' + (sec % 60) + 's' : sec + 's'; }
 function ms() {
@@ -604,6 +772,7 @@ function render() {
   renderPoints();
   renderTasks();
   renderDetail();
+  renderCombatReadout();
   selfTest();
   $('builtDate').textContent = DATA.builtAt;
 }
@@ -671,7 +840,7 @@ function renderTasks() {
   let html = '<thead><tr>' +
     '<th class="sortable" data-sort="name">Task</th>' +
     '<th class="sortable" data-sort="chance">Chance</th>' +
-    '<th>Avg #</th><th>Kill</th><th>Brace</th><th>Travel</th>' +
+    '<th>Avg #</th><th>Kill</th><th>Brace</th><th>Travel</th><th>Kill time</th>' +
     '<th class="sortable" data-sort="xp">Slayer XP</th>' +
     '<th class="sortable" data-sort="gp">GP / task</th>' +
     '<th>Expected uniques</th><th>Flags</th></tr></thead><tbody>';
@@ -699,6 +868,7 @@ function renderTasks() {
       '<td style="text-align:left">' + killSel + '</td>' +
       '<td style="text-align:left">' + braceSel + '</td>' +
       '<td class="num">' + fmtTravel(travelSec(r.m.unit)) + '</td>' +
+      '<td class="num">' + fmtDur(combatTime(r.m.unit, r.m.kills)) + '</td>' +
       '<td class="num">' + fmtNum(r.m.xp) + '</td>' +
       '<td class="num">' + gpSpan(r.m.gp) + '</td>' +
       '<td class="num">' + fmtNum(r.m.uniq, 2) + '</td>' +
@@ -911,6 +1081,7 @@ async function fetchStats() {
   try {
     S.stats = await fetchHiscores(rsn);
     S.rsn = rsn;
+    applyStatsToCombat();
     save(); statsSummary(); render();
   } catch (e) {
     st.textContent = 'Lookup failed (' + e.message + ') — name not on the hiscores?';
@@ -968,6 +1139,7 @@ function init() {
   document.querySelector('input[name=bracelet][value=' + S.bracelet + ']').checked = true;
   $('raresOff').checked = S.raresOff;
   $('ironman').checked = S.ironman;
+  initCombat();
   fillCurTask();
 
   $('master').addEventListener('change', () => { S.master = $('master').value; S.curAmount = null; REWARD_IDX = taskRewardIndex(); fillCurTask(); save(); render(); });

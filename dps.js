@@ -66,9 +66,10 @@
       defLvl = cb && cb.mage != null ? cb.mage : (cb ? cb.def : 1);
       defBonus = cb ? cb.dmagic : 0;
     } else if (L.style === 'ranged') {
-      const effRng = effLevel(L.ranged || 1, b.ranged, p.ranged, s.ranged, 8);
-      effAtk = effRng;
-      maxHit = meleeMaxHit(effRng, L.strBonus, dmgMult); // ranged uses the same max-hit shape with ranged strength
+      // accuracy and damage can carry different prayer/stance bonuses (e.g. Rigour: +20% acc, +23% dmg)
+      effAtk = effLevel(L.ranged || 1, b.ranged, p.ranged, s.ranged, 8);
+      const effStr = effLevel(L.ranged || 1, b.ranged, p.rangedStr != null ? p.rangedStr : p.ranged, s.rangedStr != null ? s.rangedStr : s.ranged, 8);
+      maxHit = meleeMaxHit(effStr, L.strBonus, dmgMult); // ranged uses the same max-hit shape with ranged strength
       atkBonus = L.atkBonus || 0;
       defLvl = cb ? cb.def : 1;
       defBonus = cb ? cb.drange : 0;
