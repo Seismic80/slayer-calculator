@@ -858,6 +858,38 @@ function renderPoints() {
     stat('Skip cost per completed task', isFinite(skipCost) ? fmtNum(skipCost, 1) : '∞', '30 points per planned skip') +
     stat('Break-even skip share', (maxSkip * 100).toFixed(0) + '%', 'skip more than this (by weight) and you bleed points') +
     '</div>';
+
+  // --- per hour: combine kill-time + travel over the completable pool ---
+  const SKIP_SECS = 8; // approx time to reroll an unwanted task at the master
+  let sumW = 0, sumWT = 0, sumWGp = 0, sumWXp = 0, missing = 0, noTravel = 0;
+  for (const t of P) {
+    if (isSkipped(t)) continue;
+    const m = taskMetrics(t, avgAmount(t));
+    const ct = combatTime(m.unit, m.kills);
+    if (ct == null) { missing++; continue; }
+    const tv = travelSec(m.unit);
+    if (tv == null) noTravel++;
+    const w = effWeight(t);
+    sumW += w; sumWT += w * (ct + (tv || 0)); sumWGp += w * m.gp; sumWXp += w * m.xp;
+  }
+  if (sumW > 0 && isFinite(net)) {
+    const avgTime = sumWT / sumW;                                  // avg completable task time (s)
+    const perTask = avgTime + (pSkip < 1 ? pSkip / (1 - pSkip) : 0) * SKIP_SECS;
+    const tph = 3600 / perTask;
+    html += '<div class="verdict-line" style="margin-top:10px;color:var(--value)">≈ ' + fmtNum(tph, 2) + ' tasks/hr → <b>' + fmtNum(tph * net) + ' slayer points/hr</b></div>';
+    html += '<div class="stat-grid">' +
+      stat('Tasks / hour', fmtNum(tph, 2), 'avg ' + fmtDur(avgTime) + '/task incl. travel') +
+      stat('Points / hour', fmtNum(tph * net), 'tasks/hr × net points/task') +
+      stat('GP / hour', fmtGP(tph * (sumWGp / sumW)), 'avg loot value per task × tasks/hr') +
+      stat('Slayer XP / hour', fmtNum(tph * (sumWXp / sumW)), 'avg XP per task × tasks/hr') +
+      '</div>';
+    if (missing || noTravel) html += '<div class="hint" style="margin-top:4px;">' +
+      (noTravel ? noTravel + ' task(s) have no travel time set (counted as 0 — set them in the breakdown). ' : '') +
+      (missing ? missing + ' task(s) excluded (no combat stats, e.g. revenants).' : '') + '</div>';
+  } else {
+    html += '<div class="hint" style="margin-top:10px;">Set your combat gear/levels (and travel times) to see tasks/hour and points/hour.</div>';
+  }
+
   $('pointsBox').innerHTML = html;
   function stat(k, v, n) { return '<div class="stat"><div class="k">' + k + '</div><div class="v">' + v + '</div><div class="n">' + n + '</div></div>'; }
 }
