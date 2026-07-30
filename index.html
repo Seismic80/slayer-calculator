@@ -213,6 +213,13 @@
     </div>
 
     <div class="card">
+      <h2>Point-boosting strategies</h2>
+      <p class="hint" style="margin-top:0;">Fillers at a low master (0-point Turael / 6-point Mazchna), milestone tasks (every 10th) at the high master for the big bonuses. Needs your combat setup so a full high-master task time is known.</p>
+      <label class="field" style="margin:0 0 8px;max-width:260px;"><span class="lbl">Filler task time (Turael/Mazchna), seconds</span><input type="number" id="fillerSec" min="10" step="5"></label>
+      <div id="boostBox"></div>
+    </div>
+
+    <div class="card">
       <h2>My current task</h2>
       <div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;">
         <label class="field" style="flex:1 1 280px;margin-bottom:0;"><span class="lbl">Task</span>
@@ -283,6 +290,7 @@ let S = {
   rsn: '', stats: null, // hiscores levels via Wise Old Man
   process: {},          // ironman processing choice per item name
   travel: {},           // custom travel time per kill-option id: { method, sec }
+  fillerSec: 75,        // Turael/Mazchna filler task time for boosting
   combat: {             // DPS setup
     atk: 99, str: 99, def: 99, ranged: 99, magic: 99, hp: 99,
     style: 'melee', attackStyle: 'slash', stance: 'Aggressive',
@@ -448,6 +456,23 @@ function initCombat() {
   $('cbSalve').addEventListener('change', () => { C.salve = $('cbSalve').value; save(); render(); });
   $('cbSlayerHelm').addEventListener('change', () => { C.slayerHelm = $('cbSlayerHelm').checked; save(); render(); });
   $('gearGrid').addEventListener('input', e => { const inp = e.target.closest('input[data-slot]'); if (!inp) return; C.gear[inp.dataset.slot] = inp.value.trim(); save(); render(); });
+}
+function renderBoost() {
+  const b = boostStrategies();
+  if (!b) { $('boostBox').innerHTML = '<div class="hint">Set combat gear/levels (and travel times) to compare boosting strategies.</div>'; return; }
+  const rows = [
+    ['No boost (all ' + b.hiName + ')', b.noBoost],
+    ['Turael fillers + ' + b.hiName + ' milestones', b.turael],
+    ['Mazchna fillers + ' + b.hiName + ' milestones', b.mazchna],
+  ].sort((a, c) => c[1] - a[1]);
+  const best = rows[0][1];
+  let html = '';
+  if (b.krystilia) html += '<div class="hint" style="margin-bottom:6px;">Krystilia can\'t complete milestone tasks (separate Wilderness streak) — showing Konar as milestone master.</div>';
+  html += '<div class="stat-grid">';
+  for (const [name, pph] of rows) html += '<div class="stat"' + (pph === best ? ' style="border-color:var(--accent)"' : '') +
+    '><div class="k">' + esc(name) + '</div><div class="v">' + fmtNum(pph) + ' pts/hr</div><div class="n">' + (pph === best ? 'best' : '') + '</div></div>';
+  html += '</div><div class="hint" style="margin-top:6px;">High-master task ≈ ' + fmtDur(b.milestoneTime) + ', filler ≈ ' + b.filler + 's.</div>';
+  $('boostBox').innerHTML = html;
 }
 function renderCombatReadout() {
   const t = taskList().find(x => tKey(x) === S.curTask) || taskList()[0];
@@ -663,6 +688,39 @@ function taskMetrics(t, amount) {
   }
   return { unit: u, kills, units, gp, xp, uniq: expU, sup };
 }
+// low-master point data for the point-boosting model (not in DATA.points)
+const BOOST_POINTS = {
+  turael: { base: 0, milestones: [] },
+  mazchna: { base: 6, milestones: [[10, 30], [50, 90], [100, 150], [250, 210], [1000, 300]] },
+};
+const MASTER_NAMES = { duradel: 'Duradel', konar: 'Konar', nieve: 'Nieve', krystilia: 'Krystilia' };
+function pointsOnTask(pdata, n) {
+  let pts = pdata.base;
+  for (const [interval, v] of pdata.milestones) if (n % interval === 0) pts = Math.max(pts, v);
+  return pts;
+}
+// compare point-boosting strategies: fillers at a low master, milestone tasks (every 10th) at the high master
+function boostStrategies() {
+  const st = poolTimeStats();
+  if (st.avgTime == null) return null;
+  const hi = ['duradel', 'konar', 'nieve'].includes(S.master) ? S.master : 'konar';
+  const hiPts = DATA.points[hi];
+  const milestoneTime = st.avgTime;   // a full high-master task (from your gear+travel)
+  const filler = S.fillerSec || 75;   // quick Turael/Mazchna task
+  const N = 1000;
+  function run(fillerData, boost) {
+    let points = 0, time = 0;
+    for (let n = 1; n <= N; n++) {
+      if (boost && n % 10 === 0) { points += pointsOnTask(hiPts, n); time += milestoneTime; }
+      else { points += pointsOnTask(boost ? fillerData : hiPts, n); time += (boost ? filler : milestoneTime); }
+    }
+    return points / time * 3600;
+  }
+  return {
+    hi, hiName: MASTER_NAMES[hi], milestoneTime, filler, krystilia: S.master === 'krystilia',
+    noBoost: run(hiPts, false), turael: run(BOOST_POINTS.turael, true), mazchna: run(BOOST_POINTS.mazchna, true),
+  };
+}
 function avgPoints(masterKey) {
   const p = DATA.points[masterKey];
   if (!p || !p.base) return 0;
@@ -810,6 +868,7 @@ function render() {
   renderTasks();
   renderDetail();
   renderCombatReadout();
+  renderBoost();
   selfTest();
   $('builtDate').textContent = DATA.builtAt;
 }
@@ -840,13 +899,34 @@ function renderRewards() {
   $('rewardsBox').innerHTML = html;
 }
 
-function renderPoints() {
+const SKIP_SECS = 8; // approx reroll time for an unwanted task at the master
+// weighted time/points/loot stats over the completable pool
+function poolTimeStats() {
   const P = pool();
   const totW = P.reduce((a, t) => a + effWeight(t), 0);
   const pSkip = totW ? P.filter(isSkipped).reduce((a, t) => a + effWeight(t), 0) / totW : 0;
   const avg = avgPoints(S.master);
   const skipCost = pSkip < 1 ? 30 * pSkip / (1 - pSkip) : Infinity;
   const net = avg - skipCost;
+  let sumW = 0, sumWT = 0, sumWGp = 0, sumWXp = 0, missing = 0, noTravel = 0;
+  for (const t of P) {
+    if (isSkipped(t)) continue;
+    const m = taskMetrics(t, avgAmount(t));
+    const ct = combatTime(m.unit, m.kills);
+    if (ct == null) { missing++; continue; }
+    const tv = travelSec(m.unit);
+    if (tv == null) noTravel++;
+    const w = effWeight(t);
+    sumW += w; sumWT += w * (ct + (tv || 0)); sumWGp += w * m.gp; sumWXp += w * m.xp;
+  }
+  const avgTime = sumW > 0 ? sumWT / sumW : null;
+  const perTask = avgTime != null ? avgTime + (pSkip < 1 ? pSkip / (1 - pSkip) : 0) * SKIP_SECS : null;
+  return { pSkip, avg, skipCost, net, avgTime, tph: perTask ? 3600 / perTask : null,
+    avgGp: sumW ? sumWGp / sumW : 0, avgXp: sumW ? sumWXp / sumW : 0, missing, noTravel };
+}
+function renderPoints() {
+  const st = poolTimeStats();
+  const pSkip = st.pSkip, avg = st.avg, skipCost = st.skipCost, net = st.net;
   const maxSkip = avg / (avg + 30);
   let html = '<div class="verdict-line ' + (net >= 0 ? 'good' : 'bad') + '">' +
     (isFinite(net)
@@ -859,33 +939,17 @@ function renderPoints() {
     stat('Break-even skip share', (maxSkip * 100).toFixed(0) + '%', 'skip more than this (by weight) and you bleed points') +
     '</div>';
 
-  // --- per hour: combine kill-time + travel over the completable pool ---
-  const SKIP_SECS = 8; // approx time to reroll an unwanted task at the master
-  let sumW = 0, sumWT = 0, sumWGp = 0, sumWXp = 0, missing = 0, noTravel = 0;
-  for (const t of P) {
-    if (isSkipped(t)) continue;
-    const m = taskMetrics(t, avgAmount(t));
-    const ct = combatTime(m.unit, m.kills);
-    if (ct == null) { missing++; continue; }
-    const tv = travelSec(m.unit);
-    if (tv == null) noTravel++;
-    const w = effWeight(t);
-    sumW += w; sumWT += w * (ct + (tv || 0)); sumWGp += w * m.gp; sumWXp += w * m.xp;
-  }
-  if (sumW > 0 && isFinite(net)) {
-    const avgTime = sumWT / sumW;                                  // avg completable task time (s)
-    const perTask = avgTime + (pSkip < 1 ? pSkip / (1 - pSkip) : 0) * SKIP_SECS;
-    const tph = 3600 / perTask;
-    html += '<div class="verdict-line" style="margin-top:10px;color:var(--value)">≈ ' + fmtNum(tph, 2) + ' tasks/hr → <b>' + fmtNum(tph * net) + ' slayer points/hr</b></div>';
+  if (st.avgTime != null && isFinite(net)) {
+    html += '<div class="verdict-line" style="margin-top:10px;color:var(--value)">≈ ' + fmtNum(st.tph, 2) + ' tasks/hr → <b>' + fmtNum(st.tph * net) + ' slayer points/hr</b></div>';
     html += '<div class="stat-grid">' +
-      stat('Tasks / hour', fmtNum(tph, 2), 'avg ' + fmtDur(avgTime) + '/task incl. travel') +
-      stat('Points / hour', fmtNum(tph * net), 'tasks/hr × net points/task') +
-      stat('GP / hour', fmtGP(tph * (sumWGp / sumW)), 'avg loot value per task × tasks/hr') +
-      stat('Slayer XP / hour', fmtNum(tph * (sumWXp / sumW)), 'avg XP per task × tasks/hr') +
+      stat('Tasks / hour', fmtNum(st.tph, 2), 'avg ' + fmtDur(st.avgTime) + '/task incl. travel') +
+      stat('Points / hour', fmtNum(st.tph * net), 'tasks/hr × net points/task') +
+      stat('GP / hour', fmtGP(st.tph * st.avgGp), 'avg loot value per task × tasks/hr') +
+      stat('Slayer XP / hour', fmtNum(st.tph * st.avgXp), 'avg XP per task × tasks/hr') +
       '</div>';
-    if (missing || noTravel) html += '<div class="hint" style="margin-top:4px;">' +
-      (noTravel ? noTravel + ' task(s) have no travel time set (counted as 0 — set them in the breakdown). ' : '') +
-      (missing ? missing + ' task(s) excluded (no combat stats, e.g. revenants).' : '') + '</div>';
+    if (st.missing || st.noTravel) html += '<div class="hint" style="margin-top:4px;">' +
+      (st.noTravel ? st.noTravel + ' task(s) have no travel time set (counted as 0 — set them in the breakdown). ' : '') +
+      (st.missing ? st.missing + ' task(s) excluded (no combat stats, e.g. revenants).' : '') + '</div>';
   } else {
     html += '<div class="hint" style="margin-top:10px;">Set your combat gear/levels (and travel times) to see tasks/hour and points/hour.</div>';
   }
@@ -1208,6 +1272,8 @@ function init() {
   document.querySelector('input[name=bracelet][value=' + S.bracelet + ']').checked = true;
   $('raresOff').checked = S.raresOff;
   $('ironman').checked = S.ironman;
+  $('fillerSec').value = S.fillerSec || 75;
+  $('fillerSec').addEventListener('input', () => { S.fillerSec = +$('fillerSec').value || 75; save(); renderBoost(); });
   initCombat();
   fillCurTask();
 
