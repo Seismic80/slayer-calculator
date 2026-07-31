@@ -93,6 +93,17 @@
   td select.killsel { width: auto; max-width: 170px; padding: 2px 4px; font-size: 14px; }
   /* single-option kills render as plain text; pad to match the select's border+padding inset */
   .killstatic { display: inline-block; padding-left: 5px; }
+  /* gear picker with icons + type-to-filter */
+  .gearrow { display: flex; align-items: center; gap: 6px; }
+  .gearrow > .lbl { flex: 0 0 50px; text-transform: capitalize; font-size: 13px; color: var(--muted); }
+  .gearpick { position: relative; flex: 1; display: flex; align-items: center; gap: 6px; }
+  .gearpick input { flex: 1; min-width: 0; }
+  .gearicon { width: 26px; height: 26px; object-fit: contain; image-rendering: pixelated; flex: 0 0 26px; }
+  .gearresults { display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 30; max-height: 260px; overflow-y: auto;
+    background: var(--sunken); border: 1px solid var(--edge); box-shadow: 0 4px 12px rgba(0,0,0,.6); }
+  .gearopt { display: flex; align-items: center; gap: 8px; padding: 3px 6px; cursor: pointer; font-size: 13px; color: var(--text); }
+  .gearopt:hover { background: rgba(255,152,31,.16); color: var(--value); }
+  .gearopt img { width: 22px; height: 22px; object-fit: contain; image-rendering: pixelated; flex: 0 0 22px; }
   .flag { display: inline-block; min-width: 21px; text-align: center; padding: 1px 3px; margin-left: 3px;
     border: 1px solid var(--edge); border-radius: 2px; background: var(--panel2); color: var(--muted);
     font-size: 13px; cursor: pointer; text-decoration: none !important; }
@@ -184,7 +195,7 @@
       </div>
       <div class="toggle-row" style="margin:8px 0 0;"><input type="checkbox" id="cbSlayerHelm"><label for="cbSlayerHelm">Slayer helmet (i) on task (black-mask bonus)</label></div>
       <details id="gearDetails" style="margin-top:6px;"><summary style="color:var(--accent);cursor:pointer;font-size:14px;">Gear (click to set 11 slots)</summary>
-        <div id="gearGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px;"></div>
+        <div id="gearGrid" style="display:grid;grid-template-columns:1fr;gap:5px;margin-top:8px;"></div>
       </details>
       <div id="dpsReadout" style="margin-top:10px;font-size:14px;"></div>
     </div>
@@ -433,11 +444,14 @@ function initCombat() {
   $('cbSlayerHelm').checked = !!C.slayerHelm;
   refreshStyleSelects();
   $('gearGrid').innerHTML = GEAR_SLOTS.map(slot => {
-    const opts = typeof EQUIPMENT !== 'undefined' ? (EQUIPMENT[slot] || []) : [];
-    const dl = 'dl-' + slot;
-    return '<label class="field" style="margin:0;"><span class="lbl" style="text-transform:capitalize;">' + slot + '</span>' +
-      '<input type="text" list="' + dl + '" data-slot="' + slot + '" value="' + esc(C.gear[slot] || '') + '" placeholder="none"></label>' +
-      '<datalist id="' + dl + '">' + opts.map(o => '<option value="' + esc(o.n) + '">').join('') + '</datalist>';
+    const cur = C.gear[slot] || '';
+    const it = cur ? gearItem(slot, cur) : null;
+    const icon = it ? itemIcon(it) : '';
+    return '<div class="gearrow" data-slot="' + slot + '"><span class="lbl">' + slot + '</span>' +
+      '<div class="gearpick">' +
+      '<img class="gearicon" data-slot="' + slot + '" src="' + icon + '" alt=""' + (icon ? '' : ' style="display:none"') + '>' +
+      '<input type="text" class="gearsearch" data-slot="' + slot + '" value="' + esc(cur) + '" placeholder="search / none" autocomplete="off">' +
+      '<div class="gearresults" data-slot="' + slot + '"></div></div></div>';
   }).join('');
   const bind = (id, fn) => $(id).addEventListener('input', () => { fn(); save(); render(); });
   bind('cbAtk', () => C.atk = +$('cbAtk').value || 1);
@@ -455,7 +469,45 @@ function initCombat() {
   $('cbCustomSpell').addEventListener('input', () => { C.customSpellMax = +$('cbCustomSpell').value || 0; save(); render(); });
   $('cbSalve').addEventListener('change', () => { C.salve = $('cbSalve').value; save(); render(); });
   $('cbSlayerHelm').addEventListener('change', () => { C.slayerHelm = $('cbSlayerHelm').checked; save(); render(); });
-  $('gearGrid').addEventListener('input', e => { const inp = e.target.closest('input[data-slot]'); if (!inp) return; C.gear[inp.dataset.slot] = inp.value.trim(); save(); render(); });
+  $('gearGrid').addEventListener('input', e => {
+    const inp = e.target.closest('input.gearsearch'); if (!inp) return;
+    showGearResults(inp.dataset.slot, inp.value);
+  });
+  $('gearGrid').addEventListener('mousedown', e => {   // mousedown fires before the input's blur
+    const opt = e.target.closest('.gearopt'); if (!opt) return;
+    e.preventDefault();
+    selectGear(opt.dataset.slot, opt.dataset.name || '');
+  });
+  $('gearGrid').addEventListener('focusout', e => {
+    const inp = e.target.closest('input.gearsearch'); if (!inp) return;
+    const slot = inp.dataset.slot;
+    setTimeout(() => { hideGearResults(slot); inp.value = S.combat.gear[slot] || ''; }, 120);
+  });
+  $('gearGrid').addEventListener('focusin', e => { const inp = e.target.closest('input.gearsearch'); if (inp) inp.select(); });
+}
+function gearItem(slot, name) { return typeof EQUIPMENT !== 'undefined' ? (EQUIPMENT[slot] || []).find(x => x.n === name) : null; }
+function itemIcon(it) { return it && it.i ? 'https://oldschool.runescape.wiki/images/' + it.i.replace(/ /g, '_') : ''; }
+function hideGearResults(slot) { const b = document.querySelector('.gearresults[data-slot="' + slot + '"]'); if (b) { b.style.display = 'none'; b.innerHTML = ''; } }
+function showGearResults(slot, text) {
+  const box = document.querySelector('.gearresults[data-slot="' + slot + '"]');
+  if (!box) return;
+  const q = text.trim().toLowerCase();
+  if (!q) { hideGearResults(slot); return; }
+  const matches = (typeof EQUIPMENT !== 'undefined' ? (EQUIPMENT[slot] || []) : []).filter(x => x.n.toLowerCase().includes(q)).slice(0, 60);
+  box.innerHTML = '<div class="gearopt" data-slot="' + slot + '" data-name="">— none —</div>' +
+    matches.map(x => '<div class="gearopt" data-slot="' + slot + '" data-name="' + esc(x.n) + '"><img loading="lazy" src="' + itemIcon(x) + '" alt="">' + esc(x.n) + '</div>').join('') +
+    (matches.length ? '' : '<div class="gearopt" style="color:var(--muted);cursor:default;">no match</div>');
+  box.style.display = 'block';
+}
+function selectGear(slot, name) {
+  S.combat.gear[slot] = name;
+  const inp = document.querySelector('input.gearsearch[data-slot="' + slot + '"]');
+  const icon = document.querySelector('.gearicon[data-slot="' + slot + '"]');
+  if (inp) inp.value = name;
+  const it = name ? gearItem(slot, name) : null;
+  if (icon) { if (it && it.i) { icon.src = itemIcon(it); icon.style.display = ''; } else { icon.style.display = 'none'; } }
+  hideGearResults(slot);
+  save(); render();
 }
 function renderBoost() {
   const b = boostStrategies();
