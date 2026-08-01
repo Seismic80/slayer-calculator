@@ -137,6 +137,8 @@
           <option value="nieve">Nieve</option>
           <option value="konar">Konar quo Maten</option>
           <option value="krystilia">Krystilia</option>
+          <option value="mazchna">Mazchna (boosting filler)</option>
+          <option value="turael">Turael (boosting filler)</option>
         </select>
       </label>
       <div class="card" style="padding:10px 12px;background:var(--panel2);">
@@ -225,8 +227,7 @@
 
     <div class="card">
       <h2>Point-boosting strategies</h2>
-      <p class="hint" style="margin-top:0;">Fillers at a low master (0-point Turael / 6-point Mazchna), milestone tasks (every 10th) at the high master for the big bonuses. Needs your combat setup so a full high-master task time is known.</p>
-      <label class="field" style="margin:0 0 8px;max-width:260px;"><span class="lbl">Filler task time (Turael/Mazchna), seconds</span><input type="number" id="fillerSec" min="10" step="5"></label>
+      <p class="hint" style="margin-top:0;">Fillers at a low master (0-point Turael / 6-point Mazchna), milestone tasks (every 10th) at the high master for the big bonuses. Filler task times are computed from your DPS + travel over Turael/Mazchna's own task lists — no estimates. Set travel times for their tasks (select Turael/Mazchna as master) to make it exact.</p>
       <div id="boostBox"></div>
     </div>
 
@@ -301,7 +302,6 @@ let S = {
   rsn: '', stats: null, // hiscores levels via Wise Old Man
   process: {},          // ironman processing choice per item name
   travel: {},           // custom travel time per kill-option id: { method, sec }
-  fillerSec: 75,        // Turael/Mazchna filler task time for boosting
   combat: {             // DPS setup
     atk: 99, str: 99, def: 99, ranged: 99, magic: 99, hp: 99,
     style: 'melee', attackStyle: 'slash', stance: 'Aggressive',
@@ -516,14 +516,16 @@ function renderBoost() {
     ['No boost (all ' + b.hiName + ')', b.noBoost],
     ['Turael fillers + ' + b.hiName + ' milestones', b.turael],
     ['Mazchna fillers + ' + b.hiName + ' milestones', b.mazchna],
-  ].sort((a, c) => c[1] - a[1]);
+  ].filter(r => r[1] != null).sort((a, c) => c[1] - a[1]);
   const best = rows[0][1];
   let html = '';
   if (b.krystilia) html += '<div class="hint" style="margin-bottom:6px;">Krystilia can\'t complete milestone tasks (separate Wilderness streak) — showing Konar as milestone master.</div>';
   html += '<div class="stat-grid">';
   for (const [name, pph] of rows) html += '<div class="stat"' + (pph === best ? ' style="border-color:var(--accent)"' : '') +
     '><div class="k">' + esc(name) + '</div><div class="v">' + fmtNum(pph) + ' pts/hr</div><div class="n">' + (pph === best ? 'best' : '') + '</div></div>';
-  html += '</div><div class="hint" style="margin-top:6px;">High-master task ≈ ' + fmtDur(b.milestoneTime) + ', filler ≈ ' + b.filler + 's.</div>';
+  html += '</div><div class="hint" style="margin-top:6px;">' + b.hiName + ' task ≈ ' + fmtDur(b.milestoneTime) +
+    ' · Turael filler ≈ ' + (b.turaelTime != null ? fmtDur(b.turaelTime) : 'n/a') +
+    ' · Mazchna filler ≈ ' + (b.mazchnaTime != null ? fmtDur(b.mazchnaTime) : 'n/a') + ' (from your DPS + travel).</div>';
   $('boostBox').innerHTML = html;
 }
 function renderCombatReadout() {
@@ -751,6 +753,27 @@ function pointsOnTask(pdata, n) {
   for (const [interval, v] of pdata.milestones) if (n % interval === 0) pts = Math.max(pts, v);
   return pts;
 }
+// average completable task time (combat from DPS + travel) over any master's own list
+function avgTaskTimeFor(mk) {
+  const tasks = DATA.masters[mk] || [];
+  const blocked = new Set((S.perMaster[mk] || {}).blocked || []);
+  let sumW = 0, sumWT = 0;
+  for (const t of tasks) {
+    if (blocked.has(t.task)) continue;
+    if (S.stats && ((t.slayerReq || 1) > (S.stats.slayer || 1) || (t.combatReq || 3) > combatLevel(S.stats))) continue;
+    const unit = (unitsOf(t) || [])[0];
+    if (!unit) continue;
+    const mon = DATA.monsters[resolveMon(unit.monsters[0])];
+    if (!mon || !mon.cb || mon.cb.def == null || !mon.hp) continue;
+    const r = dpsForMonster(mon);
+    if (!r || r.dps <= 0) continue;
+    const range = t.amount || t.extended;
+    const amount = range ? (range[0] + range[1]) / 2 : 0;
+    const w = t.weight;
+    sumW += w; sumWT += w * (amount * mon.hp / r.dps + (travelSec(unit) || 0));
+  }
+  return sumW > 0 ? sumWT / sumW : null;
+}
 // compare point-boosting strategies: fillers at a low master, milestone tasks (every 10th) at the high master
 function boostStrategies() {
   const st = poolTimeStats();
@@ -758,19 +781,23 @@ function boostStrategies() {
   const hi = ['duradel', 'konar', 'nieve'].includes(S.master) ? S.master : 'konar';
   const hiPts = DATA.points[hi];
   const milestoneTime = st.avgTime;   // a full high-master task (from your gear+travel)
-  const filler = S.fillerSec || 75;   // quick Turael/Mazchna task
+  const turaelTime = avgTaskTimeFor('turael');
+  const mazchnaTime = avgTaskTimeFor('mazchna');
   const N = 1000;
-  function run(fillerData, boost) {
+  function run(fillerData, fillerTime) {
+    if (fillerTime == null) return null;
     let points = 0, time = 0;
     for (let n = 1; n <= N; n++) {
-      if (boost && n % 10 === 0) { points += pointsOnTask(hiPts, n); time += milestoneTime; }
-      else { points += pointsOnTask(boost ? fillerData : hiPts, n); time += (boost ? filler : milestoneTime); }
+      if (n % 10 === 0) { points += pointsOnTask(hiPts, n); time += milestoneTime; }
+      else { points += fillerData.base; time += fillerTime; }
     }
     return points / time * 3600;
   }
+  let noPts = 0; for (let n = 1; n <= N; n++) noPts += pointsOnTask(hiPts, n);
   return {
-    hi, hiName: MASTER_NAMES[hi], milestoneTime, filler, krystilia: S.master === 'krystilia',
-    noBoost: run(hiPts, false), turael: run(BOOST_POINTS.turael, true), mazchna: run(BOOST_POINTS.mazchna, true),
+    hi, hiName: MASTER_NAMES[hi], milestoneTime, turaelTime, mazchnaTime, krystilia: S.master === 'krystilia',
+    noBoost: noPts / (N * milestoneTime) * 3600,
+    turael: run(BOOST_POINTS.turael, turaelTime), mazchna: run(BOOST_POINTS.mazchna, mazchnaTime),
   };
 }
 function avgPoints(masterKey) {
@@ -1324,8 +1351,6 @@ function init() {
   document.querySelector('input[name=bracelet][value=' + S.bracelet + ']').checked = true;
   $('raresOff').checked = S.raresOff;
   $('ironman').checked = S.ironman;
-  $('fillerSec').value = S.fillerSec || 75;
-  $('fillerSec').addEventListener('input', () => { S.fillerSec = +$('fillerSec').value || 75; save(); renderBoost(); });
   initCombat();
   fillCurTask();
 

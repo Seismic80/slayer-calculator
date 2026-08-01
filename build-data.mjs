@@ -187,6 +187,39 @@ const CANDIDATES = {
   'Warped creatures': ['Warped Terrorbird', 'Warped Tortoise'],
   'Waterfiends': ['Waterfiend'],
   'Wyrms': ['Wyrm'],
+  // Turael / Mazchna filler tasks (low masters, point-boosting)
+  'Banshees': ['Banshee'],
+  'Bats': ['Giant bat'],
+  'Bears': ['Black bear'],
+  'Birds': ['Chicken'],
+  'Cave bugs': ['Cave bug'],
+  'Cave crawlers': ['Cave crawler'],
+  'Cave slimes': ['Cave slime'],
+  'Cows': ['Cow'],
+  'Crawling Hands': ['Crawling Hand'],
+  'Dogs': ['Jackal'],
+  'Dwarves': ['Dwarf'],
+  'Ghosts': ['Ghost'],
+  'Goblins': ['Goblin'],
+  'Icefiends': ['Icefiend'],
+  'Lizards': ['Desert Lizard'],
+  'Minotaurs': ['Minotaur'],
+  'Monkeys': ['Monkey'],
+  'Rats': ['Rat'],
+  'Wolves': ['Wolf'],
+  'Catablepon': ['Catablepon'],
+  'Cockatrice': ['Cockatrice'],
+  'Crabs': ['Sand Crab'],
+  'Flesh Crawlers': ['Flesh Crawler'],
+  'Ghouls': ['Ghoul'],
+  'Hobgoblins': ['Hobgoblin'],
+  'Ice warriors': ['Ice warrior'],
+  'Killerwatts': ['Killerwatt'],
+  'Mogres': ['Mogre'],
+  'Pyrefiends': ['Pyrefiend'],
+  'Rockslugs': ['Rock slug'],
+  'Shades': ['Loar Shade'],
+  'Wall beasts': ['Wall beast'],
   // Krystilia (all kills must be in the Wilderness)
   'Bandits': ['Bandit'],
   'Hill Giants': ['Hill Giant'],
@@ -243,6 +276,14 @@ const TASK_ALIAS = {
   'mammoth': 'Mammoths', 'moss giant': 'Moss giants', 'pirate': 'Pirates', 'revenant': 'Revenants',
   'hill giant': 'Hill Giants', 'wilderness boss': 'Boss', 'wilderness bosse': 'Boss',
   'rogue': 'Rogues', 'scorpion': 'Scorpions', 'skeleton': 'Skeletons', 'spider': 'Spiders', 'zombie': 'Zombies',
+  'banshee': 'Banshees', 'bat': 'Bats', 'bird': 'Birds', 'cave bug': 'Cave bugs', 'cave crawler': 'Cave crawlers',
+  'cave slime': 'Cave slimes', 'cow': 'Cows', 'crawling hand': 'Crawling Hands', 'dog': 'Dogs', 'dwarf': 'Dwarves',
+  'dwarves': 'Dwarves', 'ghost': 'Ghosts', 'goblin': 'Goblins', 'icefiend': 'Icefiends', 'lizard': 'Lizards',
+  'minotaur': 'Minotaurs', 'monkey': 'Monkeys', 'wolf': 'Wolves', 'wolves': 'Wolves', 'catablepon': 'Catablepon',
+  'cockatrice': 'Cockatrice', 'crab': 'Crabs', 'crabs': 'Crabs', 'flesh crawler': 'Flesh Crawlers', 'ghoul': 'Ghouls',
+  'hobgoblin': 'Hobgoblins', 'killerwatt': 'Killerwatts', 'mogre': 'Mogres', 'rockslug': 'Rockslugs',
+  'rock slug': 'Rockslugs', 'shade': 'Shades', 'wall beast': 'Wall beasts',
+  'rat': 'Rats', 'rats': 'Rats', 'pyrefiend': 'Pyrefiends', 'ice warrior': 'Ice warriors', 'hill giant': 'Hill Giants',
 };
 function taskKey(name) {
   let n = name.toLowerCase().replace(/s$/, '');
@@ -434,6 +475,8 @@ async function main() {
     nieve: 'Nieve/Slayer assignments',
     konar: 'Konar quo Maten',
     krystilia: 'Krystilia',
+    turael: 'Turael/Slayer assignments',
+    mazchna: 'Mazchna/Slayer assignments',
   };
   // Krystilia tasks must be completed inside the Wilderness, so her kill
   // options exclude mainland-only variants (Cerberus, Skotizo, Abyssal Sire,
@@ -467,7 +510,7 @@ async function main() {
   }
 
   // 2. points tables (base + milestone) parsed from master pages
-  const pointPages = { duradel: 'Duradel', nieve: 'Nieve', konar: 'Konar quo Maten', krystilia: 'Krystilia' };
+  const pointPages = { duradel: 'Duradel', nieve: 'Nieve', konar: 'Konar quo Maten', krystilia: 'Krystilia', turael: 'Turael', mazchna: 'Mazchna' };
   const points = {};
   for (const [key, page] of Object.entries(pointPages)) {
     const wt = await pageWikitext(page);
