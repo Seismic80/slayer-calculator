@@ -585,6 +585,16 @@ async function main() {
       }
     }
     delete mon.subtableCalls;
+    // A page often lists the same drop table once per level/variant, so a shared
+    // sub-table (herbs/seeds) or gem/RDT roll gets expanded several times. A kill
+    // rolls its table once, so identical rows are duplicates, not extra rolls:
+    // collapse exact name+rate+qty matches. Genuine quantity/rate tiers (e.g.
+    // Ancient essence 1/2, 1/4, 1/10) differ in rate, so they survive.
+    const seenDrop = new Set();
+    mon.drops = mon.drops.filter(d => {
+      const k = d.name + '|' + d.rate.toFixed(8) + '|' + d.qty;
+      return seenDrop.has(k) ? false : (seenDrop.add(k), true);
+    });
   }
 
   // stats fallback for group pages without a monster infobox
