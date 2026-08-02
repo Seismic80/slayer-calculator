@@ -400,6 +400,19 @@ async function loadSubtable(name) {
 }
 
 /* ---------------- monster page parsing ---------------- */
+// Some monsters keep their signature drops in a transcluded {{Uniques/<Monster>}}
+// subtemplate (Lizardman shaman's dragon warhammer, Sarachnis's cudgel, …) rather
+// than an inline DropsLine. Detect those calls and, applying MediaWiki include
+// semantics, inline the referenced template's wikitext before drops are parsed.
+function uniquesCalls(wt) {
+  return [...wt.matchAll(/\{\{Uniques\/([^|}]+?)\s*(?:\|[^{}]*)?\}\}/g)].map(m => m[1].trim());
+}
+function expandTransclusion(tpl) {
+  const only = [...tpl.matchAll(/<onlyinclude>([\s\S]*?)<\/onlyinclude>/gi)].map(m => m[1]);
+  const body = only.length ? only.join('\n') : tpl.replace(/<noinclude>[\s\S]*?<\/noinclude>/gi, '');
+  return body.replace(/<\/?includeonly>/gi, '').trim();
+}
+
 // Defender combat stats for the DPS engine (Infobox Monster fields).
 // drange: modern single ranged-defence bonus, else legacy dstandard.
 function parseCombat(wt) {
@@ -534,6 +547,19 @@ async function main() {
   const titles = [...monsterSet];
   console.log('fetching ' + titles.length + ' monster pages...');
   const pages = await batchWikitext(titles);
+  // inline transcluded {{Uniques/…}} subtemplates so their DropsLines are parsed
+  const uniqTitles = new Set();
+  for (const t of titles) if (pages[t]) for (const u of uniquesCalls(pages[t])) uniqTitles.add('Template:Uniques/' + u);
+  if (uniqTitles.size) {
+    const uniqPages = await batchWikitext([...uniqTitles]);
+    for (const t of titles) {
+      if (!pages[t]) continue;
+      pages[t] = pages[t].replace(/\{\{Uniques\/([^|}]+?)\s*(?:\|[^{}]*)?\}\}/g, (full, name) => {
+        const sub = uniqPages['Template:Uniques/' + name.trim()];
+        return sub ? '\n' + expandTransclusion(sub) + '\n' : (OUT_WARNINGS.push('Uniques subtemplate not fetched: ' + name.trim()), full);
+      });
+    }
+  }
   const monsters = {};
   for (const t of titles) {
     if (!pages[t]) { OUT_WARNINGS.push('MISSING PAGE: ' + t); continue; }
