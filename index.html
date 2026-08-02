@@ -539,9 +539,22 @@ function renderCombatReadout() {
     weakNote = ' <span class="hint">· ' + esc(mon.cb.weakType) + ' weakness ' + mon.cb.weakPct + '%' +
       (S.combat.style === 'magic' ? (matched ? ' (applied)' : ' — cast ' + esc(mon.cb.weakType) + ' spells') : '') + '</span>';
   }
-  $('dpsReadout').innerHTML = r
+  let taskNote = '';
+  if (r && t) {
+    const amount = S.curAmount || Math.round(avgAmount(t));
+    const kills = amount * braceletMult(t);
+    const combat = combatTime(unit, kills);
+    if (combat != null) {
+      const travel = travelSec(unit);
+      const total = combat + (travel || 0);
+      taskNote = '<div class="hint" style="margin-top:4px;">Current task (<b>' + amount + ' ' + esc(t.task) +
+        '</b>): ≈ <b style="color:var(--value)">' + fmtDur(total) + '</b> to complete' +
+        ' <span class="hint">(' + fmtDur(combat) + ' fighting' + (travel ? ' + ' + fmtDur(travel) + ' travel' : ', no travel set') + ')</span></div>';
+    }
+  }
+  $('dpsReadout').innerHTML = (r
     ? 'DPS vs <b>' + esc(mon.title.replace(' (on task)', '')) + '</b>: <b style="color:var(--value)">' + r.dps.toFixed(2) + '</b> · max ' + r.maxHit + ' · acc ' + (r.accuracy * 100).toFixed(1) + '%' + weakNote
-    : '<span class="hint">Pick gear + levels to compute DPS.</span>';
+    : '<span class="hint">Pick gear + levels to compute DPS.</span>') + taskNote;
 }
 function travelSec(unit) { const tv = unit && S.travel[unit.id]; return tv && tv.sec > 0 ? tv.sec : null; }
 function fmtTravel(sec) { return sec == null ? '—' : sec >= 60 ? Math.floor(sec / 60) + 'm ' + (sec % 60) + 's' : sec + 's'; }
@@ -1106,8 +1119,15 @@ function renderDetail() {
     ? ' &middot; ' + braceB + ': ≈' + fmtNum(m.kills) + ' actual kills' : '';
   let supNote = '';
   if (m.sup) supNote = ' &middot; superiors: ' + (m.sup.pHeart * 100).toFixed(2) + '% imbued heart, ' + (m.sup.pGem * 100).toFixed(2) + '% eternal gem';
+  const combatT = combatTime(m.unit, m.kills);
+  let timeNote = '';
+  if (combatT != null) {
+    const travelT = travelSec(m.unit);
+    timeNote = ' &middot; ≈ <b>' + fmtDur(combatT + (travelT || 0)) + '</b> to complete' +
+      ' (' + fmtDur(combatT) + ' fighting' + (travelT ? ' + ' + fmtDur(travelT) + ' travel' : ', no travel set') + ')';
+  }
   $('detailIntro').innerHTML = fmtNum(m.xp) + ' Slayer XP &middot; ' + fmtNum(m.uniq, 2) + ' expected uniques' +
-    braceletNote + supNote + (S.raresOff ? ' &middot; <b>rares excluded from GP</b>' : '') +
+    timeNote + braceletNote + supNote + (S.raresOff ? ' &middot; <b>rares excluded from GP</b>' : '') +
     (S.ironman ? ' &middot; <b>alchables priced at high alch</b>' : '') +
     '.<br><b>Left-click a drop to toggle it as left on the ground</b> — excluded from every GP total (planner too).';
 
