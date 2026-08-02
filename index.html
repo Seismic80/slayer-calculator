@@ -200,6 +200,17 @@
         <div id="gearGrid" style="display:grid;grid-template-columns:1fr;gap:5px;margin-top:8px;"></div>
       </details>
       <div id="dpsReadout" style="margin-top:10px;font-size:14px;"></div>
+      <div id="presetBar" style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px;">
+        <span class="lbl" style="color:var(--muted);font-size:14px;">Gear presets</span>
+        <p class="hint" style="margin:2px 0 6px;">Save this setup as a named preset, then assign it to tasks in the <b>Gear</b> column of the task list. Load one to tweak and re-save.</p>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+          <input type="text" id="presetName" placeholder="Preset name (e.g. Ranging Hydra)" style="flex:1;min-width:150px;">
+          <button id="presetSave" type="button">Save preset</button>
+          <select id="presetLoad"><option value="">Load preset…</option></select>
+          <button id="presetDelete" type="button">Delete</button>
+        </div>
+        <div id="presetList" class="hint" style="margin-top:8px;"></div>
+      </div>
     </div>
 
     <div class="card">
@@ -309,6 +320,8 @@ let S = {
     spell: 'Ice Barrage', customSpellMax: 0,
     gear: { head: '', cape: '', neck: '', ammo: '', weapon: 'Abyssal whip', body: '', shield: '', legs: '', hands: '', feet: '', ring: '' },
   },
+  presets: [],          // saved gear/style loadouts (levels stay global): { id, name, style, ...gear }
+  taskPresets: {},      // per task key -> preset id, the loadout planned for that task
   perMaster: {}, excluded: [],
 };
 try { Object.assign(S, JSON.parse(localStorage.getItem('slayercalc-v1') || '{}')); } catch (e) {}
@@ -317,6 +330,8 @@ if (!S.process) S.process = {};
 if (!S.travel) S.travel = {};
 if (!S.combat) S.combat = { atk: 99, str: 99, def: 99, ranged: 99, magic: 99, hp: 99, style: 'melee', attackStyle: 'slash', stance: 'Aggressive', prayer: 'None', potion: 'None', salve: 'None', slayerHelm: true, gear: {} };
 if (!S.combat.gear) S.combat.gear = {};
+if (!Array.isArray(S.presets)) S.presets = [];
+if (!S.taskPresets) S.taskPresets = {};
 
 /* ---------- DPS combat setup ---------- */
 const GEAR_SLOTS = ['head', 'cape', 'neck', 'ammo', 'weapon', 'body', 'shield', 'legs', 'hands', 'feet', 'ring'];
@@ -351,8 +366,7 @@ const SPELLS = {
   'Custom / powered staff': { max: 0, custom: true },
 };
 // aggregate equipped gear into { atkBonus, strBonus, speed, magicDmg } for the chosen style
-function gearBonuses() {
-  const C = S.combat;
+function gearBonuses(C = S.combat) {
   const oIdx = C.style === 'ranged' ? 4 : C.style === 'magic' ? 3 : { stab: 0, slash: 1, crush: 2 }[C.attackStyle];
   const bIdx = C.style === 'ranged' ? 1 : C.style === 'magic' ? 2 : 0;
   let atkBonus = 0, strBonus = 0, speed = 4, magicDmg = 0;
@@ -365,8 +379,8 @@ function gearBonuses() {
   }
   return { atkBonus, strBonus, speed, magicDmg };
 }
-function buildLoadout() {
-  const C = S.combat, g = gearBonuses();
+function buildLoadout(C = S.combat) {
+  const g = gearBonuses(C);
   const L = { style: C.style, attackStyle: C.attackStyle, atk: C.atk, str: C.str, ranged: C.ranged, magic: C.magic, atkBonus: g.atkBonus, strBonus: g.strBonus, speed: g.speed };
   const st = (STANCES[C.style] || {})[C.stance] || {};
   L.stance = { atk: st.atk || 0, str: st.str || 0, ranged: st.ranged || 0 };
@@ -384,8 +398,7 @@ function buildLoadout() {
   return L;
 }
 // on-task black-mask/slayer-helm and salve multipliers (don't stack — take higher)
-function combatMult(cb) {
-  const C = S.combat;
+function combatMult(cb, C = S.combat) {
   const undead = cb && cb.attrs && cb.attrs.includes('undead');
   let helm = 1;
   if (C.slayerHelm) helm = C.style === 'melee' ? 7 / 6 : 1.15;
@@ -394,19 +407,70 @@ function combatMult(cb) {
   const m = Math.max(helm, salve);
   return { acc: m, dmg: m };
 }
-function dpsForMonster(mon) {
+function dpsForMonster(mon, C = S.combat) {
   if (!mon || !mon.cb || mon.cb.def == null || typeof DPS === 'undefined') return null;
-  const L = buildLoadout(), m = combatMult(mon.cb);
+  const L = buildLoadout(C), m = combatMult(mon.cb, C);
   L.accMult = m.acc; L.dmgMult = m.dmg;
   return DPS.computeDps(L, mon.cb);
 }
 // combat seconds for a task: (actual kills x monster HP) / dps, using the chosen unit's primary monster
-function combatTime(unit, kills) {
+function combatTime(unit, kills, C = S.combat) {
   if (!unit) return null;
   const mon = DATA.monsters[resolveMon(unit.monsters[0])];
   if (!mon || !mon.hp) return null;
-  const r = dpsForMonster(mon);
+  const r = dpsForMonster(mon, C);
   return r && r.dps > 0 ? kills * mon.hp / r.dps : null;
+}
+
+/* ---------- gear presets ---------- */
+// A preset captures how you fight (style + gear + prayer/potion/spell/…) but NOT
+// your base levels — those stay global (auto-filled from RSN), so levelling up
+// improves every preset at once.
+const PRESET_FIELDS = ['style', 'attackStyle', 'stance', 'prayer', 'potion', 'salve', 'slayerHelm', 'spell', 'customSpellMax', 'gear'];
+function presetById(id) { return S.presets.find(p => p.id === id) || null; }
+// build a full combat config (global levels + a preset's fight setup)
+function presetToCombat(p) {
+  const C = { atk: S.combat.atk, str: S.combat.str, def: S.combat.def, ranged: S.combat.ranged, magic: S.combat.magic, hp: S.combat.hp };
+  for (const f of PRESET_FIELDS) C[f] = f === 'gear' ? { ...(p.gear || {}) } : p[f];
+  return C;
+}
+// the combat config to plan a task with: its assigned preset, else the live setup
+function combatForTask(t) {
+  const p = presetById(S.taskPresets[tKey(t)]);
+  return p ? presetToCombat(p) : S.combat;
+}
+// snapshot the live editor's fight setup (no levels) for saving as a preset
+function editorFightSetup() {
+  const o = {};
+  for (const f of PRESET_FIELDS) o[f] = f === 'gear' ? { ...S.combat.gear } : S.combat[f];
+  return o;
+}
+function upsertPreset(name) {
+  name = (name || '').trim();
+  if (!name) return null;
+  let p = S.presets.find(x => x.name.toLowerCase() === name.toLowerCase());
+  if (p) Object.assign(p, editorFightSetup(), { name });
+  else { p = { id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, ...editorFightSetup() }; S.presets.push(p); }
+  return p;
+}
+function deletePreset(id) {
+  S.presets = S.presets.filter(p => p.id !== id);
+  for (const k of Object.keys(S.taskPresets)) if (S.taskPresets[k] === id) delete S.taskPresets[k];
+}
+function loadPresetToEditor(id) {
+  const p = presetById(id); if (!p) return;
+  for (const f of PRESET_FIELDS) S.combat[f] = f === 'gear' ? { ...(p.gear || {}) } : p[f];
+}
+function assignTaskPreset(taskKeyStr, id) {
+  if (id) S.taskPresets[taskKeyStr] = id; else delete S.taskPresets[taskKeyStr];
+  save(); render();
+}
+// <select> for assigning a preset to a task (value '' = live gear)
+function presetSelectHtml(taskKeyStr, extra) {
+  const cur = S.taskPresets[taskKeyStr] || '';
+  const opts = ['<option value="">Live gear</option>'].concat(
+    S.presets.map(p => '<option value="' + esc(p.id) + '"' + (p.id === cur ? ' selected' : '') + '>' + esc(p.name) + '</option>'));
+  return '<select class="presetsel" data-task="' + esc(taskKeyStr) + '"' + (extra || '') + '>' + opts.join('') + '</select>';
 }
 function fmtDur(sec) { if (sec == null) return '—'; sec = Math.round(sec); return sec >= 60 ? Math.floor(sec / 60) + 'm ' + (sec % 60) + 's' : sec + 's'; }
 function fillSel(el, options, current) { el.innerHTML = options.map(o => '<option value="' + esc(o) + '"' + (o === current ? ' selected' : '') + '>' + esc(o) + '</option>').join(''); }
@@ -431,7 +495,8 @@ function applyStatsToCombat() {
     if (S.stats[s]) S.combat[k] = S.stats[s];
   syncCombatInputs();
 }
-function initCombat() {
+// repaint every widget in the Combat setup card from S.combat (no listener rebinding)
+function syncCombatCard() {
   const C = S.combat;
   syncCombatInputs();
   $('cbStyle').value = C.style;
@@ -453,6 +518,10 @@ function initCombat() {
       '<input type="text" class="gearsearch" data-slot="' + slot + '" value="' + esc(cur) + '" placeholder="search / none" autocomplete="off">' +
       '<div class="gearresults" data-slot="' + slot + '"></div></div></div>';
   }).join('');
+}
+function initCombat() {
+  const C = S.combat;
+  syncCombatCard();
   const bind = (id, fn) => $(id).addEventListener('input', () => { fn(); save(); render(); });
   bind('cbAtk', () => C.atk = +$('cbAtk').value || 1);
   bind('cbStr', () => C.str = +$('cbStr').value || 1);
@@ -484,6 +553,31 @@ function initCombat() {
     setTimeout(() => { hideGearResults(slot); inp.value = S.combat.gear[slot] || ''; }, 120);
   });
   $('gearGrid').addEventListener('focusin', e => { const inp = e.target.closest('input.gearsearch'); if (inp) inp.select(); });
+  // presets
+  $('presetSave').addEventListener('click', () => {
+    const name = $('presetName').value.trim();
+    if (!name) { $('presetName').focus(); return; }
+    upsertPreset(name);
+    save(); render();
+  });
+  $('presetLoad').addEventListener('change', () => {
+    const id = $('presetLoad').value;
+    $('presetLoad').value = '';
+    const p = presetById(id); if (!p) return;
+    loadPresetToEditor(id);
+    $('presetName').value = p.name;
+    syncCombatCard();
+    save(); render();
+  });
+  $('presetDelete').addEventListener('click', () => {
+    const name = $('presetName').value.trim();
+    const p = S.presets.find(x => x.name.toLowerCase() === name.toLowerCase());
+    if (!p) { $('presetName').focus(); return; }
+    if (!confirm('Delete preset "' + p.name + '"? It will be unassigned from any tasks using it.')) return;
+    deletePreset(p.id);
+    $('presetName').value = '';
+    save(); render();
+  });
 }
 function gearItem(slot, name) { return typeof EQUIPMENT !== 'undefined' ? (EQUIPMENT[slot] || []).find(x => x.n === name) : null; }
 function itemIcon(it) { return it && it.i ? 'https://oldschool.runescape.wiki/images/' + it.i.replace(/ /g, '_') : ''; }
@@ -555,6 +649,22 @@ function renderCombatReadout() {
   $('dpsReadout').innerHTML = (r
     ? 'DPS vs <b>' + esc(mon.title.replace(' (on task)', '')) + '</b>: <b style="color:var(--value)">' + r.dps.toFixed(2) + '</b> · max ' + r.maxHit + ' · acc ' + (r.accuracy * 100).toFixed(1) + '%' + weakNote
     : '<span class="hint">Pick gear + levels to compute DPS.</span>') + taskNote;
+}
+const STYLE_NAMES = { melee: 'Melee', ranged: 'Ranged', magic: 'Magic' };
+function renderPresetBar() {
+  const load = $('presetLoad');
+  if (load) load.innerHTML = '<option value="">Load preset…</option>' +
+    S.presets.map(p => '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>').join('');
+  const list = $('presetList');
+  if (!list) return;
+  list.innerHTML = S.presets.length
+    ? S.presets.map(p => {
+        const wep = (p.gear && p.gear.weapon) || 'no weapon';
+        const uses = Object.values(S.taskPresets).filter(id => id === p.id).length;
+        return '&#9679; <b>' + esc(p.name) + '</b> — ' + (STYLE_NAMES[p.style] || p.style) + ', ' + esc(wep) +
+          (uses ? ' · <span style="color:var(--value)">' + uses + ' task' + (uses > 1 ? 's' : '') + '</span>' : '');
+      }).join('<br>')
+    : 'No presets saved yet.';
 }
 function travelSec(unit) { const tv = unit && S.travel[unit.id]; return tv && tv.sec > 0 ? tv.sec : null; }
 function fmtTravel(sec) { return sec == null ? '—' : sec >= 60 ? Math.floor(sec / 60) + 'm ' + (sec % 60) + 's' : sec + 's'; }
@@ -778,7 +888,7 @@ function avgTaskTimeFor(mk) {
     if (!unit) continue;
     const mon = DATA.monsters[resolveMon(unit.monsters[0])];
     if (!mon || !mon.cb || mon.cb.def == null || !mon.hp) continue;
-    const r = dpsForMonster(mon);
+    const r = dpsForMonster(mon, combatForTask(t));
     if (!r || r.dps <= 0) continue;
     const range = t.amount || t.extended;
     const amount = range ? (range[0] + range[1]) / 2 : 0;
@@ -960,6 +1070,7 @@ function render() {
   renderTasks();
   renderDetail();
   renderCombatReadout();
+  renderPresetBar();
   renderBoost();
   selfTest();
   $('builtDate').textContent = DATA.builtAt;
@@ -1004,7 +1115,7 @@ function poolTimeStats() {
   for (const t of P) {
     if (isSkipped(t)) continue;
     const m = taskMetrics(t, avgAmount(t));
-    const ct = combatTime(m.unit, m.kills);
+    const ct = combatTime(m.unit, m.kills, combatForTask(t));
     if (ct == null) { missing++; continue; }
     const tv = travelSec(m.unit);
     if (tv == null) noTravel++;
@@ -1065,7 +1176,7 @@ function renderTasks() {
   let html = '<thead><tr>' +
     '<th class="sortable" data-sort="name">Task</th>' +
     '<th class="sortable" data-sort="chance">Chance</th>' +
-    '<th>Avg #</th><th>Kill</th><th>Brace</th><th>Travel</th><th>Kill time</th>' +
+    '<th>Avg #</th><th>Kill</th><th>Brace</th><th>Gear</th><th>Travel</th><th>Kill time</th>' +
     '<th class="sortable" data-sort="xp">Slayer XP</th>' +
     '<th class="sortable" data-sort="gp">GP / task</th>' +
     '<th>Expected uniques</th><th>Flags</th></tr></thead><tbody>';
@@ -1092,8 +1203,9 @@ function renderTasks() {
       '<td class="num">' + fmtNum(r.n) + '</td>' +
       '<td style="text-align:left">' + killSel + '</td>' +
       '<td style="text-align:left">' + braceSel + '</td>' +
+      '<td style="text-align:left">' + presetSelectHtml(tKey(t)) + '</td>' +
       '<td class="num">' + fmtTravel(travelSec(r.m.unit)) + '</td>' +
-      '<td class="num">' + fmtDur(combatTime(r.m.unit, r.m.kills)) + '</td>' +
+      '<td class="num">' + fmtDur(combatTime(r.m.unit, r.m.kills, combatForTask(t))) + '</td>' +
       '<td class="num">' + fmtNum(r.m.xp) + '</td>' +
       '<td class="num">' + gpSpan(r.m.gp) + '</td>' +
       '<td class="num">' + fmtNum(r.m.uniq, 2) + '</td>' +
@@ -1119,12 +1231,15 @@ function renderDetail() {
     ? ' &middot; ' + braceB + ': ≈' + fmtNum(m.kills) + ' actual kills' : '';
   let supNote = '';
   if (m.sup) supNote = ' &middot; superiors: ' + (m.sup.pHeart * 100).toFixed(2) + '% imbued heart, ' + (m.sup.pGem * 100).toFixed(2) + '% eternal gem';
-  const combatT = combatTime(m.unit, m.kills);
+  const cf = combatForTask(t);
+  const usedPreset = presetById(S.taskPresets[tKey(t)]);
+  const combatT = combatTime(m.unit, m.kills, cf);
   let timeNote = '';
   if (combatT != null) {
     const travelT = travelSec(m.unit);
     timeNote = ' &middot; ≈ <b>' + fmtDur(combatT + (travelT || 0)) + '</b> to complete' +
-      ' (' + fmtDur(combatT) + ' fighting' + (travelT ? ' + ' + fmtDur(travelT) + ' travel' : ', no travel set') + ')';
+      ' (' + fmtDur(combatT) + ' fighting' + (travelT ? ' + ' + fmtDur(travelT) + ' travel' : ', no travel set') + ')' +
+      ' <span class="hint">using ' + (usedPreset ? '<b>' + esc(usedPreset.name) + '</b> preset' : 'live gear') + '</span>';
   }
   $('detailIntro').innerHTML = fmtNum(m.xp) + ' Slayer XP &middot; ' + fmtNum(m.uniq, 2) + ' expected uniques' +
     timeNote + braceletNote + supNote + (S.raresOff ? ' &middot; <b>rares excluded from GP</b>' : '') +
@@ -1136,7 +1251,9 @@ function renderDetail() {
     'Travel to <b>' + esc(m.unit.label) + '</b>: ' +
     '<input type="text" id="travelMethod" data-unit="' + esc(m.unit.id) + '" placeholder="your method (e.g. Xeric\'s talisman)" value="' + esc(tv.method || '') + '" style="width:230px;"> ' +
     '<input type="number" id="travelSec" data-unit="' + esc(m.unit.id) + '" min="0" step="1" placeholder="secs" value="' + (tv.sec != null ? tv.sec : '') + '" style="width:80px;"> s ' +
-    '<span class="hint">saved per kill-option; feeds time &amp; points-per-hour once the DPS engine lands.</span>';
+    '<span class="hint">saved per kill-option.</span>' +
+    '<div style="margin-top:8px;">Gear preset for this task: ' + presetSelectHtml(tKey(t)) +
+    ' <span class="hint">manage presets in the Combat setup card.</span></div>';
 
   // merge drops across the unit's monsters: name+cat -> expected per unit kill
   const merged = new Map();
@@ -1419,6 +1536,8 @@ function init() {
     save(); render();
   });
   $('taskTable').addEventListener('change', e => {
+    const preset = e.target.closest('select.presetsel');
+    if (preset) { assignTaskPreset(preset.dataset.task, preset.value); return; }
     const brace = e.target.closest('select.bracesel');
     if (brace) {
       if (brace.value) ms().brackets[brace.dataset.task] = brace.value;
@@ -1458,6 +1577,10 @@ function init() {
     if (!cur.method && cur.sec == null) delete S.travel[uid]; else S.travel[uid] = cur;
     save();
     renderTasks(); // refresh the Travel column without stealing focus from the inputs
+  });
+  $('travelBox').addEventListener('change', e => {
+    const preset = e.target.closest('select.presetsel');
+    if (preset) assignTaskPreset(preset.dataset.task, preset.value);
   });
 
   applyLayout();
