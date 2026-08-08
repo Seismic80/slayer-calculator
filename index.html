@@ -797,11 +797,12 @@ function evPerKill(monName) {
   const rareP = [];
   for (const d of mon.drops) {
     if (d.cat === 'tertiary' || ex.has(d.name)) continue;
+    const rolls = d.rolls || 1; // some monsters roll the table N times/kill (Alchemical Hydra = 2)
     if (d.cat === 'rares') {
-      rareP.push(d.rate);
+      for (let i = 0; i < rolls; i++) rareP.push(d.rate); // each roll is an independent shot
       if (S.raresOff) continue;
     }
-    gp += d.rate * d.qty * priceFor(d.name, d.cat);
+    gp += d.rate * rolls * d.qty * priceFor(d.name, d.cat);
   }
   return { gp, rareP, xp: mon.slayxp || mon.hp || 0 };
 }
@@ -1263,8 +1264,9 @@ function renderDetail() {
       if (d.name === 'Brimstone key' && S.master !== 'konar') continue; // Konar-only tertiary
       if (/clue scroll|reward casket/i.test(d.name)) continue; // per user: don't show clues
       const k = d.name + '|' + d.cat;
-      const e = merged.get(k) || { name: d.name, cat: d.cat, perUnit: 0, rate: d.rate, single: m.unit.monsters.length === 1 };
-      e.perUnit += d.rate * d.qty;
+      const rolls = d.rolls || 1;
+      const e = merged.get(k) || { name: d.name, cat: d.cat, perUnit: 0, rate: d.rate, rolls, single: m.unit.monsters.length === 1 };
+      e.perUnit += d.rate * rolls * d.qty;
       merged.set(k, e);
     }
   }
@@ -1291,7 +1293,7 @@ function renderDetail() {
       const gp = n * priceFor(d.name, cat);
       if (counted) sub += gp;
       html += '<tr class="loot-row' + (off ? ' excluded' : '') + '" data-item="' + esc(d.name) + '">' +
-        '<td>' + esc(d.name) + '</td><td class="num">' + (d.single ? fmtRate(d.rate) : '—') + '</td>' +
+        '<td>' + esc(d.name) + '</td><td class="num">' + (d.single ? fmtRate(d.rate) + (d.rolls > 1 ? ' &times;' + d.rolls : '') : '—') + '</td>' +
         '<td class="num">' + gpSpan(priceFor(d.name, cat)) + '</td>' +
         '<td class="num">' + fmtNum(n, n < 10 ? 2 : 0) + '</td>' +
         '<td class="num">' + (counted ? gpSpan(gp) : '<span class="hint">(' + fmtGP(gp) + ')</span>') + '</td></tr>';

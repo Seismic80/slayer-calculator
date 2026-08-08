@@ -465,16 +465,29 @@ function parseMonster(title, wt, warn) {
     const key = p.name + '|' + rate.toFixed(8);
     if (seen.has(key)) continue;
     seen.add(key);
-    drops.push({ name: p.name, qty: parseQty(p.quantity), rate, cat: sectionCategory(section, p.name), gemw: (p.gemw || '').toLowerCase() !== 'no' });
+    // some monsters roll the same table more than once per kill (Alchemical Hydra
+    // = 2); rarity is per-roll, so carry the roll count for the calculator to apply
+    const rolls = Math.max(1, parseInt(p.rolls, 10) || 1);
+    drops.push({ name: p.name, qty: parseQty(p.quantity), rate, ...(rolls > 1 ? { rolls } : {}), cat: sectionCategory(section, p.name), gemw: (p.gemw || '').toLowerCase() !== 'no' });
   }
   const subtableCalls = [];
-  for (const m of wt.matchAll(/\{\{((?:Herb|Rare[ ]?[Ss]eed|Tree[- ]?herb[ ]?seed|Allotment[ ]?seed|Common[ ]?seed|Hops[ ]?seed|Many[ ]?seed|Uncommon[ ]?seed|FixedAllotmentSeed|GeneralSeed)[A-Za-z ]*DropLines\d?)\s*\|\s*([^}|]+)(?:\|\s*(\d+(?:-\d+)?))?[|}]/g)) {
-    subtableCalls.push({ tpl: m[1].trim(), base: m[2].trim(), qty: m[3], section: sectionAt(m.index) });
+  const subRe = /\{\{((?:Herb|Rare[ ]?[Ss]eed|Tree[- ]?herb[ ]?seed|Allotment[ ]?seed|Common[ ]?seed|Hops[ ]?seed|Many[ ]?seed|Uncommon[ ]?seed|FixedAllotmentSeed|GeneralSeed)[A-Za-z ]*DropLines\d?)\s*\|/g;
+  let sc;
+  while ((sc = subRe.exec(wt))) {
+    let depth = 2, i = sc.index + sc[0].length; const bodyStart = i;
+    while (i < wt.length && depth > 0) { if (wt[i] === '{') depth++; else if (wt[i] === '}') depth--; i++; }
+    const body = wt.slice(bodyStart, i - 2); subRe.lastIndex = i;
+    const parts = body.split('|');
+    const qtyPart = parts.slice(1).find(x => /^\s*\d+(?:-\d+)?\s*$/.test(x));
+    const rolls = Math.max(1, parseInt((body.match(/\brolls\s*=\s*(\d+)/) || [])[1], 10) || 1);
+    subtableCalls.push({ tpl: sc[1].trim(), base: (parts[0] || '').trim(), qty: qtyPart && qtyPart.trim(), rolls, section: sectionAt(sc.index) });
   }
-  for (const m of wt.matchAll(/\{\{(Gem drop table|GemDropTable|Rare drop table|RareDropTable)\s*(?:\|\s*([^}|]+))?/gi)) {
-    const base = parseRarity((m[2] || '').trim(), vars);
+  for (const m of wt.matchAll(/\{\{(Gem drop table|GemDropTable|Rare drop table|RareDropTable)\s*((?:\|[^{}]*|\{\{[^{}]*\}\})*)\}\}/gi)) {
+    const params = m[2] || '';
+    const base = parseRarity(((params.match(/^\|\s*([^|{}]+)/) || [])[1] || '').trim(), vars);
+    const rolls = Math.max(1, parseInt((params.match(/\brolls\s*=\s*(\d+)/) || [])[1], 10) || 1);
     const isRDT = /rare/i.test(m[1]);
-    drops.push({ name: isRDT ? 'Rare drop table roll' : 'Gem drop table roll', qty: 1, rate: base ?? 1 / 128, cat: 'other', gemw: false });
+    drops.push({ name: isRDT ? 'Rare drop table roll' : 'Gem drop table roll', qty: 1, rate: base ?? 1 / 128, ...(rolls > 1 ? { rolls } : {}), cat: 'other', gemw: false });
   }
   return { title, hp: info.hitpoints, slayxp: info.slayxp || info.hitpoints, combat: info.combat, cb, drops, subtableCalls };
 }
@@ -581,7 +594,7 @@ async function main() {
         const rate = parseRarity(l.rarityRaw.replace(/\{\{\{1(?:\|[^}]*)?\}\}\}/g, '(' + base + ')'), vars);
         if (rate == null || rate <= 0 || rate > 1) { OUT_WARNINGS.push(mon.title + '/' + call.tpl + ': bad line ' + l.name); continue; }
         const qty = parseQty(l.qtyRaw.replace(/\{\{\{2\|?([^}]*)\}\}\}/, (_, d) => call.qty || d || '1'));
-        mon.drops.push({ name: l.name, qty, rate, cat: sectionCategory(call.section, l.name), gemw: true });
+        mon.drops.push({ name: l.name, qty, rate, ...(call.rolls > 1 ? { rolls: call.rolls } : {}), cat: sectionCategory(call.section, l.name), gemw: true });
       }
     }
     delete mon.subtableCalls;
